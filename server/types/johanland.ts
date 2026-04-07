@@ -140,7 +140,13 @@ export interface JohanLandIngestionConfig {
   label?: string;
 
   /** Filter by ARC source (e.g., "ARC2-Eval") */
-  source?: 'ARC1' | 'ARC1-Eval' | 'ARC2' | 'ARC2-Eval' | 'ARC-Heavy' | 'ConceptARC';
+  source?:
+    | "ARC1"
+    | "ARC1-Eval"
+    | "ARC2"
+    | "ARC2-Eval"
+    | "ARC-Heavy"
+    | "ConceptARC";
 
   /** Maximum number of puzzles to process (undefined = all) */
   limit?: number;
@@ -212,7 +218,7 @@ export interface JohanLandEnrichedAttempt {
   estimatedCost: number;
 
   // Timing
-  apiProcessingTimeMs: number;
+  apiProcessingTimeMs: number | null;
 
   // Prediction
   predictedOutputGrid: number[][] | null;
@@ -233,7 +239,7 @@ export interface JohanLandEnrichedAttempt {
   customPromptText: string | null;
 
   // Raw data preservation
-  providerRawResponse: JohanLandAttempt['metadata'];
+  providerRawResponse: JohanLandAttempt["metadata"];
 
   // AI configuration
   temperature: number | null;

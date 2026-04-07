@@ -43,6 +43,8 @@ export function useHasExplanation(puzzleId: string | null) {
       return json.data as ExplanationStatus;
     },
     enabled: !!puzzleId,
+    staleTime: 5 * 60 * 1000, // 5 minutes — explanation status can change after new analyses
+    retry: 1,
   });
 }
 
@@ -95,6 +97,8 @@ export function useExplanations(puzzleId: string | null) {
       }
     },
     enabled: !!puzzleId,
+    staleTime: 5 * 60 * 1000, // 5 minutes — explanations can change with new analyses/votes
+    retry: 1,
   });
 }
 
@@ -134,6 +138,8 @@ export function useExplanationById(
       }
       return fetchExplanationById(explanationId);
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
   });
 }
 
@@ -192,6 +198,8 @@ export function usePaginatedExplanationSummaries(
   const query = useInfiniteQuery<ExplanationSummaryResponse, Error>({
     queryKey: ['explanation-summaries', puzzleId, correctness, pageSize],
     enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       if (!puzzleId) {

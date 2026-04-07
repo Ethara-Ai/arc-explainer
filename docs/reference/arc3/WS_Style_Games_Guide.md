@@ -1,6 +1,6 @@
 # WS-Style Games Reference Guide
 
-Author: Claude Opus 4.6
+
 Date: 2026-02-06
 PURPOSE: Document how WS-style games (WS03, WS04) work, their structure, sprite roles,
 color slot assignments, and how they differ from the LS20 base game.

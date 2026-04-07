@@ -11,6 +11,7 @@ import { spawn, type SpawnOptions as ChildProcessSpawnOptions } from 'child_proc
 import path from 'path';
 import * as readline from 'readline';
 import { logger } from '../../utils/logger.ts';
+import { getPythonBin } from '../../config/env';
 
 export interface Arc3OpenRouterPayload {
   game_id: string;
@@ -41,10 +42,7 @@ export class Arc3OpenRouterPythonBridge {
    * Resolve Python binary path from environment or default.
    */
   resolvePythonBin(): string {
-    if (process.env.PYTHON_BIN) {
-      return process.env.PYTHON_BIN;
-    }
-    return process.platform === 'win32' ? 'python' : 'python3';
+    return getPythonBin();
   }
 
   /**

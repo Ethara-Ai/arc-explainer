@@ -6,15 +6,18 @@
  * SRP/DRY check: Pass — routing/controller logic only; execution delegated to services/helpers.
  */
 
-import type { Request, Response } from 'express';
-import { randomUUID } from 'crypto';
+import type { Request, Response } from "express";
+import { randomUUID } from "crypto";
 
-import { snakeBenchService } from '../services/snakeBenchService';
-import { snakeBenchIngestQueue } from '../services/snakeBenchIngestQueue';
-import { loadWormArenaPromptTemplateBundle } from '../services/snakeBench/SnakeBenchLlmPlayerPromptTemplate.ts';
-import { logger } from '../utils/logger';
-import { sseStreamManager } from '../services/streaming/SSEStreamManager';
-import { requiresUserApiKey, resolveSnakeBenchApiKey } from '../utils/environmentPolicy.js';
+import { snakeBenchService } from "../services/snakeBenchService";
+import { snakeBenchIngestQueue } from "../services/snakeBenchIngestQueue";
+import { loadWormArenaPromptTemplateBundle } from "../services/snakeBench/SnakeBenchLlmPlayerPromptTemplate.ts";
+import { logger } from "../utils/logger";
+import { sseStreamManager } from "../services/streaming/SSEStreamManager";
+import {
+  requiresUserApiKey,
+  resolveSnakeBenchApiKey,
+} from "../utils/environmentPolicy.js";
 import type {
   SnakeBenchRunMatchRequest,
   SnakeBenchRunMatchResponse,
@@ -31,11 +34,12 @@ import type {
   SnakeBenchTrueSkillLeaderboardResponse,
   WormArenaGreatestHitsResponse,
   WormArenaSuggestMatchupsResponse,
+  WormArenaSuggestedMatchup,
   WormArenaSuggestMode,
   SnakeBenchLlmPlayerPromptTemplateResponse,
   WormArenaModelInsightsResponse,
   WormArenaRunLengthDistributionResponse,
-} from '../../shared/types.js';
+} from "../../shared/types.js";
 
 export async function getLlmPlayerPromptTemplate(req: Request, res: Response) {
   try {
@@ -50,7 +54,10 @@ export async function getLlmPlayerPromptTemplate(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench getLlmPlayerPromptTemplate failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench getLlmPlayerPromptTemplate failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: SnakeBenchLlmPlayerPromptTemplateResponse = {
       success: false,
@@ -70,13 +77,17 @@ export async function runMatch(req: Request, res: Response) {
     if (!modelA || !modelB) {
       const response: SnakeBenchRunMatchResponse = {
         success: false,
-        error: 'modelA and modelB are required',
+        error: "modelA and modelB are required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
     }
 
-    const apiKeyResolution = resolveSnakeBenchApiKey(body.apiKey, body.provider, { allowTestSentinel: true });
+    const apiKeyResolution = resolveSnakeBenchApiKey(
+      body.apiKey,
+      body.provider,
+      { allowTestSentinel: true },
+    );
     if (apiKeyResolution.error) {
       const response: SnakeBenchRunMatchResponse = {
         success: false,
@@ -88,9 +99,14 @@ export async function runMatch(req: Request, res: Response) {
 
     const width = body.width != null ? Number(body.width) : undefined;
     const height = body.height != null ? Number(body.height) : undefined;
-    const maxRounds = body.maxRounds != null ? Number(body.maxRounds) : undefined;
-    const numApples = body.numApples != null ? Number(body.numApples) : undefined;
-    const playerPersona = body.playerPersona != null ? String(body.playerPersona).trim() : undefined;
+    const maxRounds =
+      body.maxRounds != null ? Number(body.maxRounds) : undefined;
+    const numApples =
+      body.numApples != null ? Number(body.numApples) : undefined;
+    const playerPersona =
+      body.playerPersona != null
+        ? String(body.playerPersona).trim()
+        : undefined;
 
     const request: SnakeBenchRunMatchRequest = {
       modelA: String(modelA),
@@ -115,7 +131,10 @@ export async function runMatch(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench runMatch failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench runMatch failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: SnakeBenchRunMatchResponse = {
       success: false,
@@ -140,8 +159,8 @@ export async function getGameProxy(req: Request, res: Response) {
     if (!gameId) {
       const response: SnakeBenchGameDetailResponse = {
         success: false,
-        gameId: '',
-        error: 'gameId is required',
+        gameId: "",
+        error: "gameId is required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
@@ -159,9 +178,12 @@ export async function getGameProxy(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench getGameProxy failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench getGameProxy failed: ${message}`,
+      "snakebench-controller",
+    );
 
-    const { gameId = '' } = req.params as { gameId?: string };
+    const { gameId = "" } = req.params as { gameId?: string };
 
     const response: SnakeBenchGameDetailResponse = {
       success: false,
@@ -176,26 +198,63 @@ export async function getGameProxy(req: Request, res: Response) {
 
 export async function searchMatches(req: Request, res: Response) {
   try {
-    const modelRaw = (req.query.model as string | undefined) ?? '';
+    const modelRaw = (req.query.model as string | undefined) ?? "";
     const model = modelRaw.trim();
 
     const query: SnakeBenchMatchSearchQuery = {
       model: model || undefined,
-      opponent: typeof req.query.opponent === 'string' ? req.query.opponent : undefined,
-      result: typeof req.query.result === 'string' ? (req.query.result as any) : undefined,
-      deathReason: typeof req.query.deathReason === 'string' ? (req.query.deathReason as any) : undefined,
-      minRounds: typeof req.query.minRounds === 'string' ? Number(req.query.minRounds) : undefined,
-      maxRounds: typeof req.query.maxRounds === 'string' ? Number(req.query.maxRounds) : undefined,
-      minScore: typeof req.query.minScore === 'string' ? Number(req.query.minScore) : undefined,
-      maxScore: typeof req.query.maxScore === 'string' ? Number(req.query.maxScore) : undefined,
-      minCost: typeof req.query.minCost === 'string' ? Number(req.query.minCost) : undefined,
-      maxCost: typeof req.query.maxCost === 'string' ? Number(req.query.maxCost) : undefined,
-      from: typeof req.query.from === 'string' ? req.query.from : undefined,
-      to: typeof req.query.to === 'string' ? req.query.to : undefined,
-      sortBy: typeof req.query.sortBy === 'string' ? (req.query.sortBy as any) : undefined,
-      sortDir: typeof req.query.sortDir === 'string' ? (req.query.sortDir as any) : undefined,
-      limit: typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined,
-      offset: typeof req.query.offset === 'string' ? Number(req.query.offset) : undefined,
+      opponent:
+        typeof req.query.opponent === "string" ? req.query.opponent : undefined,
+      result:
+        typeof req.query.result === "string"
+          ? (req.query.result as any)
+          : undefined,
+      deathReason:
+        typeof req.query.deathReason === "string"
+          ? (req.query.deathReason as any)
+          : undefined,
+      minRounds:
+        typeof req.query.minRounds === "string"
+          ? Number(req.query.minRounds)
+          : undefined,
+      maxRounds:
+        typeof req.query.maxRounds === "string"
+          ? Number(req.query.maxRounds)
+          : undefined,
+      minScore:
+        typeof req.query.minScore === "string"
+          ? Number(req.query.minScore)
+          : undefined,
+      maxScore:
+        typeof req.query.maxScore === "string"
+          ? Number(req.query.maxScore)
+          : undefined,
+      minCost:
+        typeof req.query.minCost === "string"
+          ? Number(req.query.minCost)
+          : undefined,
+      maxCost:
+        typeof req.query.maxCost === "string"
+          ? Number(req.query.maxCost)
+          : undefined,
+      from: typeof req.query.from === "string" ? req.query.from : undefined,
+      to: typeof req.query.to === "string" ? req.query.to : undefined,
+      sortBy:
+        typeof req.query.sortBy === "string"
+          ? (req.query.sortBy as any)
+          : undefined,
+      sortDir:
+        typeof req.query.sortDir === "string"
+          ? (req.query.sortDir as any)
+          : undefined,
+      limit:
+        typeof req.query.limit === "string"
+          ? Number(req.query.limit)
+          : undefined,
+      offset:
+        typeof req.query.offset === "string"
+          ? Number(req.query.offset)
+          : undefined,
     };
 
     const { rows, total } = await snakeBenchService.searchMatches(query);
@@ -211,9 +270,12 @@ export async function searchMatches(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench searchMatches failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench searchMatches failed: ${message}`,
+      "snakebench-controller",
+    );
 
-    const modelRaw = (req.query.model as string | undefined) ?? '';
+    const modelRaw = (req.query.model as string | undefined) ?? "";
     const response: SnakeBenchMatchSearchResponse = {
       success: false,
       model: modelRaw.trim(),
@@ -232,7 +294,7 @@ export async function getWormArenaGreatestHits(req: Request, res: Response) {
     const rawLimit = req.query.limitPerDimension as string | undefined;
     let limit: number | undefined;
 
-    if (typeof rawLimit === 'string' && rawLimit.trim().length > 0) {
+    if (typeof rawLimit === "string" && rawLimit.trim().length > 0) {
       const parsed = Number(rawLimit.trim());
       if (Number.isFinite(parsed)) {
         limit = parsed;
@@ -250,7 +312,10 @@ export async function getWormArenaGreatestHits(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench getWormArenaGreatestHits failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench getWormArenaGreatestHits failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: WormArenaGreatestHitsResponse = {
       success: false,
@@ -267,11 +332,14 @@ export async function getWormArenaGreatestHits(req: Request, res: Response) {
  * Check if an MP4 exists locally for the given gameId and, if so, expose a download URL.
  * No generation is attempted here—this is a lightweight availability probe.
  */
-export async function getWormArenaVideoAvailability(req: Request, res: Response) {
+export async function getWormArenaVideoAvailability(
+  req: Request,
+  res: Response,
+) {
   try {
     const { gameId } = req.params as { gameId?: string };
     if (!gameId) {
-      return res.status(400).json({ success: false, error: 'Missing gameId' });
+      return res.status(400).json({ success: false, error: "Missing gameId" });
     }
 
     const path = snakeBenchService.getLocalVideoPath(gameId);
@@ -286,7 +354,10 @@ export async function getWormArenaVideoAvailability(req: Request, res: Response)
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench getWormArenaVideoAvailability failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench getWormArenaVideoAvailability failed: ${message}`,
+      "snakebench-controller",
+    );
     return res.status(500).json({ success: false, error: message });
   }
 }
@@ -298,20 +369,26 @@ export async function downloadWormArenaVideo(req: Request, res: Response) {
   try {
     const { gameId } = req.params as { gameId?: string };
     if (!gameId) {
-      return res.status(400).json({ success: false, error: 'Missing gameId' });
+      return res.status(400).json({ success: false, error: "Missing gameId" });
     }
 
     const filePath = snakeBenchService.getLocalVideoPath(gameId);
     if (!filePath) {
-      return res.status(404).json({ success: false, error: 'Video not found' });
+      return res.status(404).json({ success: false, error: "Video not found" });
     }
 
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="snake_game_${gameId}.mp4"`);
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="snake_game_${gameId}.mp4"`,
+    );
     res.sendFile(filePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench downloadWormArenaVideo failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench downloadWormArenaVideo failed: ${message}`,
+      "snakebench-controller",
+    );
     return res.status(500).json({ success: false, error: message });
   }
 }
@@ -321,11 +398,19 @@ export async function trueSkillLeaderboard(req: Request, res: Response) {
     const limitQuery = req.query.limit as string | undefined;
     const minGamesQuery = req.query.minGames as string | undefined;
 
-    const parsedLimit = limitQuery != null && Number.isFinite(Number(limitQuery)) ? Number(limitQuery) : undefined;
+    const parsedLimit =
+      limitQuery != null && Number.isFinite(Number(limitQuery))
+        ? Number(limitQuery)
+        : undefined;
     const parsedMinGames =
-      minGamesQuery != null && Number.isFinite(Number(minGamesQuery)) ? Number(minGamesQuery) : undefined;
+      minGamesQuery != null && Number.isFinite(Number(minGamesQuery))
+        ? Number(minGamesQuery)
+        : undefined;
 
-    const entries = await snakeBenchService.getTrueSkillLeaderboard(parsedLimit ?? 150, parsedMinGames ?? 3);
+    const entries = await snakeBenchService.getTrueSkillLeaderboard(
+      parsedLimit ?? 150,
+      parsedMinGames ?? 3,
+    );
 
     const response: SnakeBenchTrueSkillLeaderboardResponse = {
       success: true,
@@ -336,7 +421,10 @@ export async function trueSkillLeaderboard(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench trueSkillLeaderboard failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench trueSkillLeaderboard failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: SnakeBenchTrueSkillLeaderboardResponse = {
       success: false,
       entries: [],
@@ -355,7 +443,7 @@ export async function runBatch(req: Request, res: Response) {
     if (!modelA || !modelB) {
       const response: SnakeBenchRunBatchResponse = {
         success: false,
-        error: 'modelA and modelB are required',
+        error: "modelA and modelB are required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
@@ -365,13 +453,17 @@ export async function runBatch(req: Request, res: Response) {
     if (!Number.isFinite(parsedCount)) {
       const response: SnakeBenchRunBatchResponse = {
         success: false,
-        error: 'count must be a number',
+        error: "count must be a number",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
     }
 
-    const apiKeyResolution = resolveSnakeBenchApiKey(body.apiKey, body.provider, { allowTestSentinel: true });
+    const apiKeyResolution = resolveSnakeBenchApiKey(
+      body.apiKey,
+      body.provider,
+      { allowTestSentinel: true },
+    );
     if (apiKeyResolution.error) {
       const response: SnakeBenchRunBatchResponse = {
         success: false,
@@ -388,7 +480,10 @@ export async function runBatch(req: Request, res: Response) {
       height: body.height != null ? Number(body.height) : undefined,
       maxRounds: body.maxRounds != null ? Number(body.maxRounds) : undefined,
       numApples: body.numApples != null ? Number(body.numApples) : undefined,
-      playerPersona: body.playerPersona != null ? String(body.playerPersona).trim() : undefined,
+      playerPersona:
+        body.playerPersona != null
+          ? String(body.playerPersona).trim()
+          : undefined,
       count: parsedCount,
       apiKey: apiKeyResolution.apiKey,
       provider: apiKeyResolution.provider,
@@ -405,7 +500,10 @@ export async function runBatch(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench runBatch failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench runBatch failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: SnakeBenchRunBatchResponse = {
       success: false,
@@ -434,7 +532,10 @@ export async function listGames(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench listGames failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench listGames failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: SnakeBenchListGamesResponse = {
       success: false,
@@ -463,8 +564,8 @@ export async function getGame(req: Request, res: Response) {
     if (!gameId) {
       const response: SnakeBenchGameDetailResponse = {
         success: false,
-        gameId: '',
-        error: 'gameId is required',
+        gameId: "",
+        error: "gameId is required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
@@ -483,9 +584,12 @@ export async function getGame(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench getGame failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench getGame failed: ${message}`,
+      "snakebench-controller",
+    );
 
-    const { gameId = '' } = req.params as { gameId?: string };
+    const { gameId = "" } = req.params as { gameId?: string };
 
     const response: SnakeBenchGameDetailResponse = {
       success: false,
@@ -502,14 +606,19 @@ export async function health(req: Request, res: Response) {
   try {
     const healthResult = await snakeBenchService.healthCheck();
     const response: SnakeBenchHealthResponse = healthResult;
-    return res.status(healthResult.status === 'error' ? 500 : 200).json(response);
+    return res
+      .status(healthResult.status === "error" ? 500 : 200)
+      .json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench health check failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench health check failed: ${message}`,
+      "snakebench-controller",
+    );
 
     const response: SnakeBenchHealthResponse = {
       success: false,
-      status: 'error',
+      status: "error",
       pythonAvailable: false,
       backendDirExists: false,
       runnerExists: false,
@@ -526,9 +635,9 @@ export async function recentActivity(req: Request, res: Response) {
     const daysRaw = req.query.days as string | undefined;
     let days: number | undefined;
 
-    if (typeof daysRaw === 'string') {
+    if (typeof daysRaw === "string") {
       const trimmed = daysRaw.trim().toLowerCase();
-      if (trimmed === 'all') {
+      if (trimmed === "all") {
         days = 0;
       } else if (trimmed.length > 0) {
         const parsed = Number(trimmed);
@@ -549,7 +658,10 @@ export async function recentActivity(req: Request, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench recentActivity failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench recentActivity failed: ${message}`,
+      "snakebench-controller",
+    );
 
     return res.status(500).json({
       success: false,
@@ -563,8 +675,10 @@ export async function basicLeaderboard(req: Request, res: Response) {
   try {
     const limitQuery = req.query.limit;
     const sortByQuery = req.query.sortBy;
-    const limit = Number.isFinite(Number(limitQuery)) ? Math.max(1, Math.min(Number(limitQuery), 150)) : 10;
-    const sortBy = sortByQuery === 'winRate' ? 'winRate' : 'gamesPlayed';
+    const limit = Number.isFinite(Number(limitQuery))
+      ? Math.max(1, Math.min(Number(limitQuery), 150))
+      : 10;
+    const sortBy = sortByQuery === "winRate" ? "winRate" : "gamesPlayed";
 
     const result = await snakeBenchService.getBasicLeaderboard(limit, sortBy);
 
@@ -575,7 +689,10 @@ export async function basicLeaderboard(req: Request, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench basicLeaderboard failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench basicLeaderboard failed: ${message}`,
+      "snakebench-controller",
+    );
 
     return res.status(500).json({
       success: false,
@@ -596,7 +713,10 @@ export async function stats(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench stats failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench stats failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: SnakeBenchStatsResponse = {
       success: false,
       stats: { totalGames: 0, activeModels: 0, topApples: 0, totalCost: 0 },
@@ -609,13 +729,13 @@ export async function stats(req: Request, res: Response) {
 
 export async function modelRating(req: Request, res: Response) {
   try {
-    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? '';
+    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? "";
     const modelSlug = modelSlugRaw.trim();
 
     if (!modelSlug) {
       const response: SnakeBenchModelRatingResponse = {
         success: false,
-        error: 'modelSlug query parameter is required',
+        error: "modelSlug query parameter is required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
@@ -630,7 +750,10 @@ export async function modelRating(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench modelRating failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench modelRating failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: SnakeBenchModelRatingResponse = {
       success: false,
       error: message,
@@ -642,23 +765,29 @@ export async function modelRating(req: Request, res: Response) {
 
 export async function modelHistory(req: Request, res: Response) {
   try {
-    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? '';
+    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? "";
     const modelSlug = modelSlugRaw.trim();
     const limitQuery = req.query.limit as string | undefined;
-    const limit = limitQuery != null && Number.isFinite(Number(limitQuery)) ? Number(limitQuery) : undefined;
+    const limit =
+      limitQuery != null && Number.isFinite(Number(limitQuery))
+        ? Number(limitQuery)
+        : undefined;
 
     if (!modelSlug) {
       const response: SnakeBenchModelHistoryResponse = {
         success: false,
-        modelSlug: '',
+        modelSlug: "",
         history: [],
         timestamp: Date.now(),
-        error: 'modelSlug query parameter is required' as any,
+        error: "modelSlug query parameter is required" as any,
       };
       return res.status(400).json(response);
     }
 
-    const history = await snakeBenchService.getModelMatchHistory(modelSlug, limit);
+    const history = await snakeBenchService.getModelMatchHistory(
+      modelSlug,
+      limit,
+    );
     const response: SnakeBenchModelHistoryResponse = {
       success: true,
       modelSlug,
@@ -668,10 +797,13 @@ export async function modelHistory(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench modelHistory failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench modelHistory failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: SnakeBenchModelHistoryResponse = {
       success: false,
-      modelSlug: '',
+      modelSlug: "",
       history: [],
       timestamp: Date.now(),
       error: message as any,
@@ -687,13 +819,13 @@ export async function suggestMatchups(req: Request, res: Response) {
     const minGamesQuery = req.query.minGames as string | undefined;
 
     // Validate mode
-    let mode: WormArenaSuggestMode = 'ladder';
-    if (modeQuery === 'entertainment') {
-      mode = 'entertainment';
-    } else if (modeQuery && modeQuery !== 'ladder') {
+    let mode: WormArenaSuggestMode = "ladder";
+    if (modeQuery === "entertainment") {
+      mode = "entertainment";
+    } else if (modeQuery && modeQuery !== "ladder") {
       const response: WormArenaSuggestMatchupsResponse = {
         success: false,
-        mode: 'ladder',
+        mode: "ladder",
         matchups: [],
         totalCandidates: 0,
         error: `Invalid mode '${modeQuery}'. Must be 'ladder' or 'entertainment'.`,
@@ -702,15 +834,25 @@ export async function suggestMatchups(req: Request, res: Response) {
       return res.status(400).json(response);
     }
 
-    const parsedLimit = limitQuery != null && Number.isFinite(Number(limitQuery)) ? Number(limitQuery) : 20;
-    const parsedMinGames = minGamesQuery != null && Number.isFinite(Number(minGamesQuery)) ? Number(minGamesQuery) : 3;
+    const parsedLimit =
+      limitQuery != null && Number.isFinite(Number(limitQuery))
+        ? Number(limitQuery)
+        : 20;
+    const parsedMinGames =
+      minGamesQuery != null && Number.isFinite(Number(minGamesQuery))
+        ? Number(minGamesQuery)
+        : 3;
 
-    const result = await snakeBenchService.suggestMatchups(mode, parsedLimit, parsedMinGames);
+    const result = await snakeBenchService.suggestMatchups(
+      mode,
+      parsedLimit,
+      parsedMinGames,
+    );
 
     const response: WormArenaSuggestMatchupsResponse = {
       success: true,
       mode: result.mode,
-      matchups: result.matchups,
+      matchups: result.matchups as WormArenaSuggestedMatchup[],
       totalCandidates: result.totalCandidates,
       timestamp: Date.now(),
     };
@@ -718,10 +860,13 @@ export async function suggestMatchups(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench suggestMatchups failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench suggestMatchups failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: WormArenaSuggestMatchupsResponse = {
       success: false,
-      mode: 'ladder',
+      mode: "ladder",
       matchups: [],
       totalCandidates: 0,
       error: message,
@@ -734,7 +879,7 @@ export async function suggestMatchups(req: Request, res: Response) {
 export async function ingestQueueStatus(req: Request, res: Response) {
   try {
     const pendingJobs = snakeBenchIngestQueue.getPendingJobCount();
-    
+
     return res.json({
       success: true,
       pendingJobs,
@@ -742,8 +887,11 @@ export async function ingestQueueStatus(req: Request, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench ingestQueueStatus failed: ${message}`, 'snakebench-controller');
-    
+    logger.error(
+      `SnakeBench ingestQueueStatus failed: ${message}`,
+      "snakebench-controller",
+    );
+
     return res.status(500).json({
       success: false,
       pendingJobs: 0,
@@ -769,7 +917,10 @@ export async function modelsWithGames(req: Request, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench modelsWithGames failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench modelsWithGames failed: ${message}`,
+      "snakebench-controller",
+    );
 
     return res.status(500).json({
       success: false,
@@ -787,20 +938,21 @@ export async function modelsWithGames(req: Request, res: Response) {
  */
 export async function modelHistoryFull(req: Request, res: Response) {
   try {
-    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? '';
+    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? "";
     const modelSlug = modelSlugRaw.trim();
 
     if (!modelSlug) {
       return res.status(400).json({
         success: false,
-        modelSlug: '',
+        modelSlug: "",
         history: [],
-        error: 'modelSlug query parameter is required',
+        error: "modelSlug query parameter is required",
         timestamp: Date.now(),
       });
     }
 
-    const history = await snakeBenchService.getModelMatchHistoryUnbounded(modelSlug);
+    const history =
+      await snakeBenchService.getModelMatchHistoryUnbounded(modelSlug);
 
     // Also get the model's aggregate stats for the header
     const rating = await snakeBenchService.getModelRating(modelSlug);
@@ -814,11 +966,14 @@ export async function modelHistoryFull(req: Request, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench modelHistoryFull failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench modelHistoryFull failed: ${message}`,
+      "snakebench-controller",
+    );
 
     return res.status(500).json({
       success: false,
-      modelSlug: '',
+      modelSlug: "",
       history: [],
       error: message,
       timestamp: Date.now(),
@@ -832,14 +987,14 @@ export async function modelHistoryFull(req: Request, res: Response) {
  */
 export async function modelInsightsReport(req: Request, res: Response) {
   try {
-    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? '';
+    const modelSlugRaw = (req.query.modelSlug as string | undefined) ?? "";
     const modelSlug = modelSlugRaw.trim();
 
     if (!modelSlug) {
       const response: WormArenaModelInsightsResponse = {
         success: false,
-        modelSlug: '',
-        error: 'modelSlug query parameter is required',
+        modelSlug: "",
+        error: "modelSlug query parameter is required",
         timestamp: Date.now(),
       };
       return res.status(400).json(response);
@@ -851,7 +1006,7 @@ export async function modelInsightsReport(req: Request, res: Response) {
       const response: WormArenaModelInsightsResponse = {
         success: false,
         modelSlug,
-        error: 'No insights available for this model',
+        error: "No insights available for this model",
         timestamp: Date.now(),
       };
       return res.status(404).json(response);
@@ -867,10 +1022,13 @@ export async function modelInsightsReport(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench modelInsightsReport failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench modelInsightsReport failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: WormArenaModelInsightsResponse = {
       success: false,
-      modelSlug: '',
+      modelSlug: "",
       error: message,
       timestamp: Date.now(),
     };
@@ -887,19 +1045,21 @@ export async function runLengthDistribution(req: Request, res: Response) {
     if (minGamesParam !== undefined) {
       const parsed = parseInt(String(minGamesParam), 10);
       if (Number.isNaN(parsed) || parsed < 0) {
-        const response: { success: boolean; error: string; timestamp: number } = {
-          success: false,
-          error: 'minGames must be a non-negative integer',
-          timestamp: Date.now(),
-        };
+        const response: { success: boolean; error: string; timestamp: number } =
+          {
+            success: false,
+            error: "minGames must be a non-negative integer",
+            timestamp: Date.now(),
+          };
         return res.status(400).json(response);
       }
       if (parsed > 1000) {
-        const response: { success: boolean; error: string; timestamp: number } = {
-          success: false,
-          error: 'minGames cannot exceed 1000',
-          timestamp: Date.now(),
-        };
+        const response: { success: boolean; error: string; timestamp: number } =
+          {
+            success: false,
+            error: "minGames cannot exceed 1000",
+            timestamp: Date.now(),
+          };
         return res.status(400).json(response);
       }
       minGames = parsed;
@@ -917,7 +1077,10 @@ export async function runLengthDistribution(req: Request, res: Response) {
     return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench runLengthDistribution failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench runLengthDistribution failed: ${message}`,
+      "snakebench-controller",
+    );
     const response: WormArenaRunLengthDistributionResponse = {
       success: false,
       error: message,
@@ -937,20 +1100,20 @@ async function streamModelInsights(req: Request, res: Response) {
     const { modelSlug } = req.params as { modelSlug: string };
 
     if (!modelSlug || !modelSlug.trim()) {
-      res.status(400).json({ error: 'modelSlug is required' });
+      res.status(400).json({ error: "modelSlug is required" });
       return;
     }
 
     const sessionId = randomUUID();
     sseStreamManager.register(sessionId, res);
-    sseStreamManager.sendEvent(sessionId, 'stream.init', {
+    sseStreamManager.sendEvent(sessionId, "stream.init", {
       sessionId,
       modelSlug,
       createdAt: new Date().toISOString(),
     });
 
     const abortController = new AbortController();
-    res.on('close', () => abortController.abort());
+    res.on("close", () => abortController.abort());
 
     try {
       // Call service with callbacks - service emits events through handlers
@@ -958,30 +1121,36 @@ async function streamModelInsights(req: Request, res: Response) {
         modelSlug,
         {
           onStatus: (status) => {
-            sseStreamManager.sendEvent(sessionId, 'stream.status', status);
+            sseStreamManager.sendEvent(sessionId, "stream.status", status);
           },
           onChunk: (chunk) => {
-            sseStreamManager.sendEvent(sessionId, 'stream.chunk', chunk);
+            sseStreamManager.sendEvent(sessionId, "stream.chunk", chunk);
           },
         },
-        abortController.signal
+        abortController.signal,
       );
 
       // Service completed successfully - send completion and close
-      sseStreamManager.sendEvent(sessionId, 'stream.complete', {
-        status: 'success',
+      sseStreamManager.sendEvent(sessionId, "stream.complete", {
+        status: "success",
         report,
         timestamp: Date.now(),
       });
       sseStreamManager.close(sessionId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`[ModelInsightsStream] Failed: ${message}`, 'snakebench-controller');
-      sseStreamManager.error(sessionId, 'INSIGHTS_STREAM_ERROR', message);
+      logger.error(
+        `[ModelInsightsStream] Failed: ${message}`,
+        "snakebench-controller",
+      );
+      sseStreamManager.error(sessionId, "INSIGHTS_STREAM_ERROR", message);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`SnakeBench streamModelInsights failed: ${message}`, 'snakebench-controller');
+    logger.error(
+      `SnakeBench streamModelInsights failed: ${message}`,
+      "snakebench-controller",
+    );
     res.status(500).json({ error: message });
   }
 }
@@ -1012,4 +1181,3 @@ export const snakeBenchController = {
   runLengthDistribution,
   streamModelInsights,
 };
-

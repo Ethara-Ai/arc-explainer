@@ -11,6 +11,7 @@ import { spawn, type SpawnOptions as ChildProcessSpawnOptions } from 'child_proc
 import path from 'path';
 import * as readline from 'readline';
 import { logger } from '../../utils/logger.ts';
+import { getPythonBin } from '../../config/env';
 import type { SnakeBenchMatchPayload, PreparedMatchConfig } from './helpers/validators.ts';
 
 export interface SpawnOptions {
@@ -37,10 +38,7 @@ export class SnakeBenchPythonBridge {
    * Resolve Python binary path from environment or default.
    */
   resolvePythonBin(): string {
-    if (process.env.PYTHON_BIN) {
-      return process.env.PYTHON_BIN;
-    }
-    return process.platform === 'win32' ? 'python' : 'python3';
+    return getPythonBin();
   }
 
   /**

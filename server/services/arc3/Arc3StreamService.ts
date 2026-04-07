@@ -17,46 +17,66 @@ import { Arc3RealGameRunner } from "./Arc3RealGameRunner";
 import type { Arc3AgentRunConfig } from "./types";
 
 export interface StreamArc3Payload {
-  game_id: string;  // Match ARC3 API property naming
+  game_id: string; // Match ARC3 API property naming
   agentName?: string;
-  systemPrompt?: string;  // Base system instructions (overrides default)
-  instructions: string;   // User/operator guidance
+  systemPrompt?: string; // Base system instructions (overrides default)
+  instructions: string; // User/operator guidance
   model?: string;
   maxTurns?: number;
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
   sessionId?: string;
   createdAt?: number;
   expiresAt?: number;
   existingGameGuid?: string;
-  scorecardId?: string;  // CRITICAL: Scorecard ID for ARC API calls during continuation
+  scorecardId?: string; // CRITICAL: Scorecard ID for ARC API calls during continuation
   providerResponseId?: string | null;
   lastFrame?: FrameData; // Cached last known frame for safe continuation
-  systemPromptPresetId?: 'twitch' | 'playbook' | 'none';
+  systemPromptPresetId?: "twitch" | "playbook" | "none";
   skipDefaultSystemPrompt?: boolean;
 }
 
 export interface ContinueStreamArc3Payload extends StreamArc3Payload {
-  userMessage: string;  // New user message to chain
-  previousResponseId: string;  // From last response for Responses API chaining
+  userMessage: string; // New user message to chain
+  previousResponseId: string; // From last response for Responses API chaining
   lastFrame?: FrameData; // Cached frame from client to seed continuation state
 }
 
 export const PENDING_ARC3_SESSION_TTL_SECONDS = 900; // 15 minutes to allow user follow-ups
+const POST_RUN_TTL_MS = 300_000; // 5 minutes — continuation window after run completes
 
 export class Arc3StreamService {
   private readonly pendingSessions: Map<string, StreamArc3Payload> = new Map();
-  private readonly pendingSessionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  private readonly continuationSessions: Map<string, ContinueStreamArc3Payload> = new Map();
-  private readonly continuationSessionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly pendingSessionTimers: Map<
+    string,
+    ReturnType<typeof setTimeout>
+  > = new Map();
+  private readonly continuationSessions: Map<
+    string,
+    ContinueStreamArc3Payload
+  > = new Map();
+  private readonly continuationSessionTimers: Map<
+    string,
+    ReturnType<typeof setTimeout>
+  > = new Map();
   private readonly apiClient: Arc3ApiClient;
   private readonly gameRunner: Arc3RealGameRunner;
 
   constructor() {
-    this.apiClient = new Arc3ApiClient(process.env.ARC3_API_KEY || '');
+    const apiKey = process.env.ARC3_API_KEY || "";
+    if (!apiKey) {
+      logger.warn(
+        "[ARC3 StreamService] ARC3_API_KEY is not set. Streaming will fail until configured.",
+        "arc3-stream-service",
+      );
+    }
+    this.apiClient = new Arc3ApiClient(apiKey);
     this.gameRunner = new Arc3RealGameRunner(this.apiClient);
   }
 
-  savePendingPayload(payload: StreamArc3Payload, ttlMs: number = PENDING_ARC3_SESSION_TTL_SECONDS * 1000): string {
+  savePendingPayload(
+    payload: StreamArc3Payload,
+    ttlMs: number = PENDING_ARC3_SESSION_TTL_SECONDS * 1000,
+  ): string {
     const sessionId = payload.sessionId ?? nanoid();
     const now = Date.now();
     const expirationTimestamp = ttlMs > 0 ? now + ttlMs : now;
@@ -86,7 +106,10 @@ export class Arc3StreamService {
     }
   }
 
-  updatePendingPayload(sessionId: string, updates: Partial<StreamArc3Payload>): void {
+  updatePendingPayload(
+    sessionId: string,
+    updates: Partial<StreamArc3Payload>,
+  ): void {
     const existingPayload = this.pendingSessions.get(sessionId);
     if (!existingPayload) {
       return;
@@ -112,10 +135,10 @@ export class Arc3StreamService {
       existingGameGuid?: string;
       lastFrame?: FrameData;
     },
-    ttlMs: number = PENDING_ARC3_SESSION_TTL_SECONDS * 1000
+    ttlMs: number = PENDING_ARC3_SESSION_TTL_SECONDS * 1000,
   ): void {
     if (!continuationData.previousResponseId) {
-      throw new Error('Continuation payload requires a previousResponseId.');
+      throw new Error("Continuation payload requires a previousResponseId.");
     }
 
     const now = Date.now();
@@ -136,7 +159,9 @@ export class Arc3StreamService {
     this.scheduleContinuationExpiration(sessionId, ttlMs);
   }
 
-  getContinuationPayload(sessionId: string): ContinueStreamArc3Payload | undefined {
+  getContinuationPayload(
+    sessionId: string,
+  ): ContinueStreamArc3Payload | undefined {
     return this.continuationSessions.get(sessionId);
   }
 
@@ -149,7 +174,10 @@ export class Arc3StreamService {
     }
   }
 
-  private scheduleContinuationExpiration(sessionId: string, ttlMs: number): void {
+  private scheduleContinuationExpiration(
+    sessionId: string,
+    ttlMs: number,
+  ): void {
     const existingTimer = this.continuationSessionTimers.get(sessionId);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -165,7 +193,7 @@ export class Arc3StreamService {
       this.continuationSessionTimers.delete(sessionId);
       logger.debug(
         `[ARC3 Streaming] Continuation payload for session ${sessionId} expired after ${ttlMs}ms`,
-        "arc3-stream-service"
+        "arc3-stream-service",
       );
     }, ttlMs);
 
@@ -192,7 +220,7 @@ export class Arc3StreamService {
       this.pendingSessionTimers.delete(sessionId);
       logger.debug(
         `[ARC3 Streaming] Pending payload for session ${sessionId} expired after ${ttlMs}ms`,
-        "arc3-stream-service"
+        "arc3-stream-service",
       );
     }, ttlMs);
 
@@ -203,27 +231,55 @@ export class Arc3StreamService {
     this.pendingSessionTimers.set(sessionId, timer);
   }
 
-  async startStreaming(_req: Request, payload: StreamArc3Payload): Promise<string> {
+  async startStreaming(
+    _req: Request,
+    payload: StreamArc3Payload,
+  ): Promise<string> {
     const sessionId = payload.sessionId ?? nanoid();
+
+    if (!process.env.ARC3_API_KEY) {
+      sseStreamManager.error(
+        sessionId,
+        "CONFIG_ERROR",
+        "ARC3_API_KEY is not configured. Set the environment variable and restart the server.",
+      );
+      return sessionId;
+    }
 
     try {
       if (!sseStreamManager.has(sessionId)) {
-        throw new Error("SSE session must be registered before starting ARC3 streaming.");
+        throw new Error(
+          "SSE session must be registered before starting ARC3 streaming.",
+        );
       }
 
       const streamingConfig = resolveStreamingConfig();
       if (!streamingConfig.enabled) {
-        sseStreamManager.error(sessionId, "STREAMING_DISABLED", "Streaming is disabled on this server.");
+        sseStreamManager.error(
+          sessionId,
+          "STREAMING_DISABLED",
+          "Streaming is disabled on this server.",
+        );
         return sessionId;
       }
 
-      const { game_id, agentName, systemPrompt, instructions, model, maxTurns, reasoningEffort, systemPromptPresetId, skipDefaultSystemPrompt } = payload;
+      const {
+        game_id,
+        agentName,
+        systemPrompt,
+        instructions,
+        model,
+        maxTurns,
+        reasoningEffort,
+        systemPromptPresetId,
+        skipDefaultSystemPrompt,
+      } = payload;
 
       // Send initial status
       sseStreamManager.sendEvent(sessionId, "stream.init", {
         state: "starting",
         game_id,
-        agentName: agentName || 'ARC3 Agent',
+        agentName: agentName || "ARC3 Agent",
         timestamp: Date.now(),
       });
 
@@ -236,7 +292,7 @@ export class Arc3StreamService {
             metadata: {
               ...(chunk?.metadata ?? {}),
               game_id,
-              agentName: agentName || 'ARC3 Agent',
+              agentName: agentName || "ARC3 Agent",
             },
           };
           sseStreamManager.sendEvent(sessionId, "stream.chunk", enrichedChunk);
@@ -247,13 +303,13 @@ export class Arc3StreamService {
         emitEvent: (event: string, data: any) => {
           const enrichedEvent =
             data && typeof data === "object"
-              ? { ...data, game_id, agentName: agentName || 'ARC3 Agent' }
-              : { game_id, agentName: agentName || 'ARC3 Agent' };
+              ? { ...data, game_id, agentName: agentName || "ARC3 Agent" }
+              : { game_id, agentName: agentName || "ARC3 Agent" };
           sseStreamManager.sendEvent(sessionId, event, enrichedEvent);
         },
         metadata: {
           game_id,
-          agentName: agentName || 'ARC3 Agent',
+          agentName: agentName || "ARC3 Agent",
         },
       };
 
@@ -281,32 +337,37 @@ export class Arc3StreamService {
       });
 
       // Override the game runner to emit streaming events
-      const runResult = await this.gameRunner.runWithStreaming(runConfig, streamHarness);
+      const runResult = await this.gameRunner.runWithStreaming(
+        runConfig,
+        streamHarness,
+      );
 
-      const finalFrame = Array.isArray(runResult.frames) && runResult.frames.length > 0
-        ? (runResult.frames[runResult.frames.length - 1] as FrameData)
-        : payload.lastFrame;
+      const finalFrame =
+        Array.isArray(runResult.frames) && runResult.frames.length > 0
+          ? (runResult.frames[runResult.frames.length - 1] as FrameData)
+          : payload.lastFrame;
 
-      logger.info(`[ARC3 Streaming] Caching final frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`, 'arc3-stream-service');
+      logger.info(
+        `[ARC3 Streaming] Caching final frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`,
+        "arc3-stream-service",
+      );
 
       // Persist response metadata for future continuations
       // CRITICAL: Store scorecardId and game state for session continuation
       this.updatePendingPayload(sessionId, {
         existingGameGuid: runResult.gameGuid,
-        scorecardId: runResult.scorecardId,  // CRITICAL: Required for continuation requests
+        scorecardId: runResult.scorecardId, // CRITICAL: Required for continuation requests
         providerResponseId: runResult.providerResponseId ?? null,
         lastFrame: finalFrame,
       });
 
       // After successful streaming, extend the session TTL to allow continuation
       // This gives the user time to send a follow-up message
-      const extendedTTL = 300000; // 5 minutes
-      this.scheduleExpiration(sessionId, extendedTTL);
+      this.scheduleExpiration(sessionId, POST_RUN_TTL_MS);
       logger.info(
-        `[ARC3 Streaming] Session ${sessionId} completed, extended TTL to ${extendedTTL}ms for potential continuation`,
-        "arc3-stream-service"
+        `[ARC3 Streaming] Session ${sessionId} completed, extended TTL to ${POST_RUN_TTL_MS}ms for potential continuation`,
+        "arc3-stream-service",
       );
-
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`ARC3 streaming failed: ${message}`, "arc3-stream-service");
@@ -318,36 +379,76 @@ export class Arc3StreamService {
     return sessionId;
   }
 
-  async continueStreaming(_req: Request, payload: ContinueStreamArc3Payload): Promise<string> {
+  async continueStreaming(
+    _req: Request,
+    payload: ContinueStreamArc3Payload,
+  ): Promise<string> {
     const sessionId = payload.sessionId ?? nanoid();
+
+    if (!process.env.ARC3_API_KEY) {
+      sseStreamManager.error(
+        sessionId,
+        "CONFIG_ERROR",
+        "ARC3_API_KEY is not configured. Set the environment variable and restart the server.",
+      );
+      return sessionId;
+    }
 
     try {
       if (!sseStreamManager.has(sessionId)) {
-        throw new Error("SSE session must be registered before continuing ARC3 streaming.");
+        throw new Error(
+          "SSE session must be registered before continuing ARC3 streaming.",
+        );
       }
 
       const streamingConfig = resolveStreamingConfig();
       if (!streamingConfig.enabled) {
-        sseStreamManager.error(sessionId, "STREAMING_DISABLED", "Streaming is disabled on this server.");
+        sseStreamManager.error(
+          sessionId,
+          "STREAMING_DISABLED",
+          "Streaming is disabled on this server.",
+        );
         return sessionId;
       }
 
-      const { game_id, agentName, systemPrompt, instructions, model, maxTurns, reasoningEffort, userMessage, previousResponseId, existingGameGuid, scorecardId, systemPromptPresetId, skipDefaultSystemPrompt } = payload;
+      const {
+        game_id,
+        agentName,
+        systemPrompt,
+        instructions,
+        model,
+        maxTurns,
+        reasoningEffort,
+        userMessage,
+        previousResponseId,
+        existingGameGuid,
+        scorecardId,
+        systemPromptPresetId,
+        skipDefaultSystemPrompt,
+      } = payload;
 
       if (!previousResponseId) {
-        throw new Error('ARC3 continuation requires a previousResponseId to maintain conversation state.');
+        throw new Error(
+          "ARC3 continuation requires a previousResponseId to maintain conversation state.",
+        );
       }
 
       // CRITICAL: Validate game state before continuation - don't continue finished games
-      if (payload.lastFrame?.state && payload.lastFrame.state !== 'NOT_FINISHED') {
-        throw new Error(`Cannot continue game in terminal state: ${payload.lastFrame.state}. Game has already ended.`);
+      const TERMINAL_STATES = new Set(["WIN", "GAME_OVER"]);
+      if (
+        payload.lastFrame?.state &&
+        TERMINAL_STATES.has(payload.lastFrame.state)
+      ) {
+        throw new Error(
+          `Cannot continue game in terminal state: ${payload.lastFrame.state}. Game has already ended.`,
+        );
       }
 
       // Send initial status
       sseStreamManager.sendEvent(sessionId, "stream.init", {
         state: "continuing",
         game_id,
-        agentName: agentName || 'ARC3 Agent',
+        agentName: agentName || "ARC3 Agent",
         hasPreviousResponse: !!previousResponseId,
         isContinuingGame: !!existingGameGuid,
         timestamp: Date.now(),
@@ -362,7 +463,7 @@ export class Arc3StreamService {
             metadata: {
               ...(chunk?.metadata ?? {}),
               game_id,
-              agentName: agentName || 'ARC3 Agent',
+              agentName: agentName || "ARC3 Agent",
             },
           };
           sseStreamManager.sendEvent(sessionId, "stream.chunk", enrichedChunk);
@@ -373,13 +474,13 @@ export class Arc3StreamService {
         emitEvent: (event: string, data: any) => {
           const enrichedEvent =
             data && typeof data === "object"
-              ? { ...data, game_id, agentName: agentName || 'ARC3 Agent' }
-              : { game_id, agentName: agentName || 'ARC3 Agent' };
+              ? { ...data, game_id, agentName: agentName || "ARC3 Agent" }
+              : { game_id, agentName: agentName || "ARC3 Agent" };
           sseStreamManager.sendEvent(sessionId, event, enrichedEvent);
         },
         metadata: {
           game_id,
-          agentName: agentName || 'ARC3 Agent',
+          agentName: agentName || "ARC3 Agent",
         },
       };
 
@@ -388,14 +489,14 @@ export class Arc3StreamService {
         state: "running",
         game_id,
         message: existingGameGuid
-          ? `Agent continuing existing game ${existingGameGuid} with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`
-          : `Agent continuing with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`,
+          ? `Agent continuing existing game ${existingGameGuid} with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? "..." : ""}"`
+          : `Agent continuing with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? "..." : ""}"`,
         timestamp: Date.now(),
       });
 
       logger.info(
         `[ARC3 Continue] Running with userMessage (${userMessage.length} chars), previousResponseId=${!!previousResponseId}, existingGameGuid=${existingGameGuid}`,
-        "arc3-stream-service"
+        "arc3-stream-service",
       );
 
       // Run the continued agent with streaming
@@ -406,14 +507,14 @@ export class Arc3StreamService {
         game_id,
         agentName,
         systemPrompt,
-        instructions: `${instructions}\n\nUser feedback: ${userMessage}`,  // Append user message to instructions
+        instructions: `${instructions}\n\nUser feedback: ${userMessage}`, // Append user message to instructions
         model,
         maxTurns,
         reasoningEffort,
-        existingGameGuid,  // Pass the game session guid to continue
-        scorecardId,  // CRITICAL: Pass scorecard ID to keep scorecard open across continuations
+        existingGameGuid, // Pass the game session guid to continue
+        scorecardId, // CRITICAL: Pass scorecard ID to keep scorecard open across continuations
         previousResponseId,
-        seedFrame: payload.lastFrame,  // CRITICAL FIX: Pass cached frame to avoid executing actions
+        seedFrame: payload.lastFrame, // CRITICAL FIX: Pass cached frame to avoid executing actions
         storeResponse: true,
         sessionId,
         systemPromptPresetId,
@@ -422,33 +523,41 @@ export class Arc3StreamService {
 
       // Override the game runner to emit streaming events
       // The previous_response_id will be passed to the Responses API to chain conversations
-      const runResult = await this.gameRunner.runWithStreaming(runConfig, streamHarness);
+      const runResult = await this.gameRunner.runWithStreaming(
+        runConfig,
+        streamHarness,
+      );
 
-      const finalFrame = Array.isArray(runResult.frames) && runResult.frames.length > 0
-        ? (runResult.frames[runResult.frames.length - 1] as FrameData)
-        : payload.lastFrame;
+      const finalFrame =
+        Array.isArray(runResult.frames) && runResult.frames.length > 0
+          ? (runResult.frames[runResult.frames.length - 1] as FrameData)
+          : payload.lastFrame;
 
-      logger.info(`[ARC3 Streaming] Caching continuation frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`, 'arc3-stream-service');
+      logger.info(
+        `[ARC3 Streaming] Caching continuation frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`,
+        "arc3-stream-service",
+      );
 
       // CRITICAL: Preserve scorecardId across continuations (stays open until game ends)
       this.updatePendingPayload(sessionId, {
         existingGameGuid: runResult.gameGuid,
-        scorecardId: runResult.scorecardId,  // CRITICAL: Keep scorecard ID for future continuations
+        scorecardId: runResult.scorecardId, // CRITICAL: Keep scorecard ID for future continuations
         providerResponseId: runResult.providerResponseId ?? null,
         lastFrame: finalFrame,
       });
 
       // After successful continuation, extend the base session TTL again for potential further continuation
-      const extendedTTL = 300000; // 5 minutes
-      this.scheduleExpiration(sessionId, extendedTTL);
+      this.scheduleExpiration(sessionId, POST_RUN_TTL_MS);
       logger.info(
-        `[ARC3 Streaming] Continuation ${sessionId} completed, extended TTL to ${extendedTTL}ms for potential further continuation`,
-        "arc3-stream-service"
+        `[ARC3 Streaming] Continuation ${sessionId} completed, extended TTL to ${POST_RUN_TTL_MS}ms for potential further continuation`,
+        "arc3-stream-service",
       );
-
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`ARC3 continuation failed: ${message}`, "arc3-stream-service");
+      logger.error(
+        `ARC3 continuation failed: ${message}`,
+        "arc3-stream-service",
+      );
       sseStreamManager.error(sessionId, "STREAMING_FAILED", message);
       // Clear both payloads on error
       this.clearPendingPayload(sessionId);

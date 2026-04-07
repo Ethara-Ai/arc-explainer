@@ -1,11 +1,3 @@
-/**
-Author: GPT-5 Codex
-Date: 2026-02-06T19:45:00Z
-PURPOSE: Minimal landing page with rotating ARC 1/2 GIFs and ARC3 replay data visualization.
-The ARC3 panel uses a canvas replay player backed by a same-origin proxy for official NDJSON recordings,
-including support for curated recording IDs that fail with direct browser fetch because of CORS.
-SRP/DRY check: Pass - page stays focused on hero composition while reusing ARC3CanvasPlayer.
-*/
 import React, { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 

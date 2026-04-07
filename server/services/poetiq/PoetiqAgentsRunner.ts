@@ -13,6 +13,7 @@
  */
 
 import path from 'node:path';
+import { getPythonBin } from '../../config/env';
 import { spawn, type SpawnOptions } from 'node:child_process';
 
 import { Agent, run, tool } from '@openai/agents';
@@ -278,8 +279,7 @@ class PoetiqAgentsSdkRunner implements PoetiqAgentsRunner {
   }
 
   private resolvePythonBin(): string {
-    if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
-    return process.platform === 'win32' ? 'python' : 'python3';
+    return getPythonBin();
   }
 
   private async runPoetiqToolRunner(

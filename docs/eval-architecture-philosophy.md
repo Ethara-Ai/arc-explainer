@@ -1,0 +1,15 @@
+# Systems Cartography
+
+A visual philosophy for mapping the invisible architecture of intelligent systems.
+
+---
+
+Systems Cartography treats software architecture as terrain to be surveyed — not explained, but *mapped*. Every module is a landmass, every data flow a river, every protocol a trade route. The cartographer's task is not to narrate the journey but to render the territory with such precision that the journey becomes self-evident. Dark grounds anchor the composition like deep water on a nautical chart, while luminous accent lines trace the paths that data follows through the system. The result must appear as though it took countless hours of meticulous measurement and drafting — because the territory demands that respect.
+
+Color is territorial. Each domain claims its hue: the orchestration layer in cool steel blue, the execution engine in living teal, game substrates in warm amber, provider interfaces in muted violet. These are not decorative choices but *jurisdictional boundaries*, readable at a glance the way elevation bands communicate altitude on a topographic map. Where domains meet, thin connecting lines — never heavy, always precise — show the direction and nature of their exchange. The cartographer labors over these intersections with painstaking care, because boundaries are where systems reveal their true character.
+
+Typography operates as cartographic notation. Large forms name the regions; small monospaced marks annotate the specific coordinates. Code fragments appear as specimen labels in a naturalist's field guide — terse, clinical, essential. No word appears that doesn't earn its place. Headings function as place names on the map: bold enough to orient, restrained enough never to compete with the terrain itself. Every letterform is placed with the precision of a master engraver, because sloppy labels betray the entire survey.
+
+Space is the cartographer's most honest tool. Generous margins between systems communicate isolation; tight clustering signals coupling. The negative space between components carries as much information as the components themselves — it reveals what is *not* connected, what operates independently, what breathes. A crowded map is a failed map. The product of deep expertise is knowing what to leave out, what white space to protect, what silence to preserve between the measured marks of the system's topology.
+
+Repetition builds authority. Consistent visual patterns — the same box shape for every module, the same arrow weight for every data flow, the same accent treatment for every protocol boundary — create the systematic rigor of a true cartographic standard. The viewer learns to read the legend once and then navigates freely. This discipline, this refusal to introduce novelty for its own sake, is what separates expert-level technical cartography from amateur illustration. The final artifact should feel like it was extracted from the system itself — an inevitable, discovered document rather than a designed one.

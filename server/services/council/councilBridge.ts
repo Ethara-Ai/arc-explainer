@@ -12,6 +12,7 @@ import path from 'path';
 import * as readline from 'readline';
 import fs from 'fs';
 import { logger } from '../../utils/logger.ts';
+import { getPythonBin } from '../../config/env';
 
 // Configuration
 const COUNCIL_TIMEOUT_MS = parseInt(process.env.COUNCIL_TIMEOUT_MS || '1200000', 10); // 20 min default for council
@@ -66,10 +67,7 @@ export type CouncilBridgeEvent =
  * Resolve Python binary path
  */
 function resolvePythonBin(): string {
-  if (process.env.PYTHON_BIN) {
-    return process.env.PYTHON_BIN;
-  }
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return getPythonBin();
 }
 
 /**

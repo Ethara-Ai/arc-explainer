@@ -11,10 +11,11 @@ import { spawn, type SpawnOptions as ChildProcessSpawnOptions } from 'child_proc
 import path from 'path';
 import * as readline from 'readline';
 import { logger } from '../../utils/logger.ts';
+import { getPythonBin } from '../../config/env';
 
 export interface Arc3HaikuPayload {
   game_id: string;
-  model?: string;                // Default: claude-haiku-4-6
+  model?: string;                // Default: claude-3-5-haiku-20241022
   max_turns?: number;
   anthropic_api_key?: string;    // Anthropic API key (BYOK)
   arc3_api_key?: string;         // ARC3 API key
@@ -32,10 +33,7 @@ export class Arc3HaikuPythonBridge {
    * Resolve Python binary path from environment or default.
    */
   resolvePythonBin(): string {
-    if (process.env.PYTHON_BIN) {
-      return process.env.PYTHON_BIN;
-    }
-    return process.platform === 'win32' ? 'python' : 'python3';
+    return getPythonBin();
   }
 
   /**
@@ -99,7 +97,7 @@ export class Arc3HaikuPythonBridge {
         'arc3-haiku'
       );
       logger.info(
-        `[Arc3Haiku] Game: ${payload.game_id}, Model: ${payload.model || 'claude-haiku-4-6'}`,
+        `[Arc3Haiku] Game: ${payload.game_id}, Model: ${payload.model || 'claude-3-5-haiku-20241022'}`,
         'arc3-haiku'
       );
 

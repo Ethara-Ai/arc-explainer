@@ -52,6 +52,7 @@ import { LeaderboardRepository } from './LeaderboardRepository.ts';
 import { CurationRepository } from './CurationRepository.ts';
 import { AnalyticsRepository } from './AnalyticsRepository.ts';
 import { WormArenaSessionRepository } from './WormArenaSessionRepository.ts';
+import { EvalRepository } from './EvalRepository';
 
 import { DatabaseSchema } from './database/DatabaseSchema.ts';
 import { logger } from '../utils/logger.ts';
@@ -73,6 +74,7 @@ export class RepositoryService {
   private curationRepository: CurationRepository;
   private analyticsRepository: AnalyticsRepository;
   private wormArenaSessionRepository: WormArenaSessionRepository;
+  private evalRepository: EvalRepository;
 
   private initialized = false;
 
@@ -93,6 +95,7 @@ export class RepositoryService {
     this.curationRepository = new CurationRepository();
     this.analyticsRepository = new AnalyticsRepository();
     this.wormArenaSessionRepository = new WormArenaSessionRepository();
+    this.evalRepository = new EvalRepository();
   }
 
   /**
@@ -228,6 +231,13 @@ export class RepositoryService {
    */
   get wormArenaSessions(): WormArenaSessionRepository {
     return this.wormArenaSessionRepository;
+  }
+
+  /**
+   * Get eval harness repository (eval sessions, runs, steps persistence)
+   */
+  get eval(): EvalRepository {
+    return this.evalRepository;
   }
 
   /**

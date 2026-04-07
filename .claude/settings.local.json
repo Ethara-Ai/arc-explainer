@@ -31,7 +31,17 @@
       "Bash(npm run test:*)",
       "Bash(grep:*)",
       "Bash(git config:*)",
-      "Read(//c/Projects/arc-explainer/**)"
+      "Read(//c/Projects/arc-explainer/**)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:sdk.vercel.ai)",
+      "WebFetch(domain:ai-sdk.dev)",
+      "WebFetch(domain:docs.cloud.google.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:aws.amazon.com)",
+      "WebFetch(domain:repost.aws)"
     ],
     "defaultMode": "bypassPermissions"
   },

@@ -1,10 +1,3 @@
-/**
- * Author: GPT-5 Codex
- * Date: 2025-10-17
- * PURPOSE: Coordinates puzzle analysis requests, bridging legacy POST flows with SSE streaming so UI components receive live reasoning and persisted results.
- * SRP/DRY check: Pass - verified streaming and non-streaming branches share this orchestration hook without duplicated lifecycle logic.
- */
-
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';

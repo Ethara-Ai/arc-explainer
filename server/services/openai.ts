@@ -19,7 +19,7 @@ import {
   ServiceOptions,
   AIResponse,
   PromptPreview,
-  ModelInfo
+  ModelInfo,
 } from "./base/BaseAIService.js";
 import {
   getApiModelName,
@@ -27,20 +27,20 @@ import {
   modelSupportsTemperature,
   GPT5_REASONING_MODELS,
   MODELS_WITH_REASONING,
-  GPT5_CODEX_MODELS
+  GPT5_CODEX_MODELS,
 } from "../config/models/index.js";
-import { openAIClient } from "./openai/client.js";
+import { getOpenAIClient } from "./openai/client.js";
 import { buildResponsesPayload } from "./openai/payloadBuilder.js";
 import {
   normalizeResponse,
   parseResponse,
   NormalizedOpenAIResponse,
-  ParsedOpenAIResponse
+  ParsedOpenAIResponse,
 } from "./openai/responseParser.js";
 import {
   createStreamAggregates,
   handleStreamEvent,
-  OpenAIStreamAggregates
+  OpenAIStreamAggregates,
 } from "./openai/streaming.js";
 import { normalizeModelKey } from "./openai/modelRegistry.js";
 
@@ -55,7 +55,7 @@ const STREAMING_MODEL_KEYS = [
   "gpt-5-chat-latest",
   "o3-mini-2025-01-31",
   "o4-mini-2025-04-16",
-  "o3-2025-04-16"
+  "o3-2025-04-16",
 ];
 
 export class OpenAIService extends BaseAIService {
@@ -66,7 +66,7 @@ export class OpenAIService extends BaseAIService {
     "o3-mini": "o3-mini",
     "o3-2025-04-16": "o3-2025-04-16",
     "gpt-5-chat-latest": "gpt-5-chat-latest",
-    "gpt-5.1-codex-mini": "gpt-5.1-codex-mini"
+    "gpt-5.1-codex-mini": "gpt-5.1-codex-mini",
   };
 
   protected getSchemaForModel(modelKey: string, testCount: number): any | null {
@@ -92,8 +92,8 @@ export class OpenAIService extends BaseAIService {
       }
     }
 
-    return STREAMING_MODEL_KEYS.some(candidate =>
-      Array.from(comparisonKeys).some(key => candidate.startsWith(`${key}-`))
+    return STREAMING_MODEL_KEYS.some((candidate) =>
+      Array.from(comparisonKeys).some((key) => candidate.startsWith(`${key}-`)),
     );
   }
 
@@ -105,10 +105,22 @@ export class OpenAIService extends BaseAIService {
     promptId: string = DEFAULT_PROMPT_ID,
     customPrompt?: string,
     options?: PromptOptions,
-    serviceOpts: ServiceOptions = {}
+    serviceOpts: ServiceOptions = {},
   ): Promise<AIResponse> {
-    const promptPackage = this.buildPromptPackage(task, promptId, customPrompt, options, serviceOpts, modelKey);
-    this.logAnalysisStart(modelKey, temperature, promptPackage.userPrompt.length, serviceOpts);
+    const promptPackage = this.buildPromptPackage(
+      task,
+      promptId,
+      customPrompt,
+      options,
+      serviceOpts,
+      modelKey,
+    );
+    this.logAnalysisStart(
+      modelKey,
+      temperature,
+      promptPackage.userPrompt.length,
+      serviceOpts,
+    );
 
     const testCount = task.test.length;
     const captureReasoning = serviceOpts.captureReasoning !== false;
@@ -120,13 +132,24 @@ export class OpenAIService extends BaseAIService {
         temperature,
         serviceOpts,
         testCount,
-        taskId
+        taskId,
       );
 
-      const parsed = this.parseProviderResponse(response, modelKey, captureReasoning, taskId);
-      const completeness = this.validateResponseCompleteness(response, modelKey);
+      const parsed = this.parseProviderResponse(
+        response,
+        modelKey,
+        captureReasoning,
+        taskId,
+      );
+      const completeness = this.validateResponseCompleteness(
+        response,
+        modelKey,
+      );
       if (!completeness.isComplete) {
-        console.warn(`[${this.provider}] Incomplete response detected for ${modelKey}:`, completeness.suggestion);
+        console.warn(
+          `[${this.provider}] Incomplete response detected for ${modelKey}:`,
+          completeness.suggestion,
+        );
       }
 
       return this.buildStandardResponse(
@@ -144,7 +167,7 @@ export class OpenAIService extends BaseAIService {
         promptPackage,
         promptId,
         customPrompt,
-        parsed.responseId
+        parsed.responseId,
       );
     } catch (error) {
       this.handleAnalysisError(error, modelKey, task);
@@ -159,7 +182,7 @@ export class OpenAIService extends BaseAIService {
     promptId: string = DEFAULT_PROMPT_ID,
     customPrompt?: string,
     options?: PromptOptions,
-    serviceOpts: ServiceOptions = {}
+    serviceOpts: ServiceOptions = {},
   ): Promise<AIResponse> {
     if (!this.supportsStreaming(modelKey)) {
       return super.analyzePuzzleWithStreaming(
@@ -170,12 +193,24 @@ export class OpenAIService extends BaseAIService {
         promptId,
         customPrompt,
         options,
-        serviceOpts
+        serviceOpts,
       );
     }
 
-    const promptPackage = this.buildPromptPackage(task, promptId, customPrompt, options, serviceOpts, modelKey);
-    this.logAnalysisStart(modelKey, temperature, promptPackage.userPrompt.length, serviceOpts);
+    const promptPackage = this.buildPromptPackage(
+      task,
+      promptId,
+      customPrompt,
+      options,
+      serviceOpts,
+      modelKey,
+    );
+    this.logAnalysisStart(
+      modelKey,
+      temperature,
+      promptPackage.userPrompt.length,
+      serviceOpts,
+    );
 
     const harness = serviceOpts.stream;
     const controller = this.registerStream(harness);
@@ -190,33 +225,44 @@ export class OpenAIService extends BaseAIService {
         temperature,
         serviceOpts,
         testCount,
-        taskId
+        taskId,
       });
 
       this.emitStreamEvent(harness, "stream.status", { state: "requested" });
 
-      const stream = openAIClient.responses.stream(
+      const stream = getOpenAIClient().responses.stream(
         { ...body, stream: true },
-        { signal: controller?.signal }
+        { signal: controller?.signal },
       );
 
-      const aggregates: OpenAIStreamAggregates = createStreamAggregates(expectingJsonSchema);
+      const aggregates: OpenAIStreamAggregates =
+        createStreamAggregates(expectingJsonSchema);
 
       for await (const event of stream as AsyncIterable<ResponseStreamEvent>) {
         const eventType = (event as any)?.type;
         console.log(`[OpenAI-Stream] Received event: ${eventType}`);
-        
+
         // Log first few reasoning/text events to verify they're coming
-        if (eventType?.includes('reasoning') || eventType?.includes('text') || eventType?.includes('content')) {
-          console.log(`[OpenAI-Stream] ${eventType} data:`, JSON.stringify(event).substring(0, 200));
+        if (
+          eventType?.includes("reasoning") ||
+          eventType?.includes("text") ||
+          eventType?.includes("content")
+        ) {
+          console.log(
+            `[OpenAI-Stream] ${eventType} data:`,
+            JSON.stringify(event).substring(0, 200),
+          );
         }
-        
+
         handleStreamEvent(event, aggregates, {
-          emitChunk: chunk => {
-            console.log(`[OpenAI-Stream] Emitting chunk: type=${chunk.type}, delta length=${chunk.delta?.length || 0}`);
+          emitChunk: (chunk) => {
+            console.log(
+              `[OpenAI-Stream] Emitting chunk: type=${chunk.type}, delta length=${chunk.delta?.length || 0}`,
+            );
             this.emitStreamChunk(harness, chunk);
           },
-          emitEvent: (eventName, payload) => this.emitStreamEvent(harness, eventName, payload)
+          emitEvent: (eventName, payload) =>
+            this.emitStreamEvent(harness, eventName, payload),
         });
       }
 
@@ -227,11 +273,19 @@ export class OpenAIService extends BaseAIService {
       const finalResponse = await stream.finalResponse();
       const normalized = normalizeResponse(finalResponse, {
         modelKey,
-        calculateCost: (key, usage) => this.calculateResponseCost(key, usage)
+        calculateCost: (key, usage) => this.calculateResponseCost(key, usage),
       });
 
-      const parsed = this.parseProviderResponse(normalized, modelKey, captureReasoning, taskId);
-      const completeness = this.validateResponseCompleteness(normalized, modelKey);
+      const parsed = this.parseProviderResponse(
+        normalized,
+        modelKey,
+        captureReasoning,
+        taskId,
+      );
+      const completeness = this.validateResponseCompleteness(
+        normalized,
+        modelKey,
+      );
 
       const finalModelResponse = this.buildStandardResponse(
         modelKey,
@@ -248,7 +302,7 @@ export class OpenAIService extends BaseAIService {
         promptPackage,
         promptId,
         customPrompt,
-        parsed.responseId
+        parsed.responseId,
       );
 
       this.finalizeStream(harness, {
@@ -256,7 +310,7 @@ export class OpenAIService extends BaseAIService {
         durationMs: Date.now() - startedAt,
         metadata: {
           responseId: parsed.responseId,
-          tokenUsage: parsed.tokenUsage
+          tokenUsage: parsed.tokenUsage,
         },
         responseSummary: {
           outputText: normalized.output_text,
@@ -267,8 +321,8 @@ export class OpenAIService extends BaseAIService {
           accumulatedSummary: aggregates.summary,
           accumulatedParsed: aggregates.parsed,
           refusal: aggregates.refusal,
-          analysis: finalModelResponse
-        }
+          analysis: finalModelResponse,
+        },
       });
 
       return finalModelResponse;
@@ -290,7 +344,9 @@ export class OpenAIService extends BaseAIService {
     const normalizedKey = normalizeModelKey(modelKey);
     const isReasoning = MODELS_WITH_REASONING.has(normalizedKey);
     const modelConfig = getModelConfig(modelKey);
-    const supportsTemperature = !normalizedKey.startsWith("gpt-5") && modelSupportsTemperature(normalizedKey);
+    const supportsTemperature =
+      !normalizedKey.startsWith("gpt-5") &&
+      modelSupportsTemperature(normalizedKey);
 
     return {
       name: modelName,
@@ -300,7 +356,7 @@ export class OpenAIService extends BaseAIService {
       supportsFunctionCalling: true,
       supportsSystemPrompts: true,
       supportsStructuredOutput: !modelName.includes("gpt-5-chat-latest"),
-      supportsVision: Boolean(modelConfig?.supportsVision)
+      supportsVision: Boolean(modelConfig?.supportsVision),
     };
   }
 
@@ -310,10 +366,17 @@ export class OpenAIService extends BaseAIService {
     promptId: string = DEFAULT_PROMPT_ID,
     customPrompt?: string,
     options?: PromptOptions,
-    serviceOpts: ServiceOptions = {}
+    serviceOpts: ServiceOptions = {},
   ): PromptPreview {
     const modelName = getApiModelName(modelKey);
-    const promptPackage = this.buildPromptPackage(task, promptId, customPrompt, options, serviceOpts, modelKey);
+    const promptPackage = this.buildPromptPackage(
+      task,
+      promptId,
+      customPrompt,
+      options,
+      serviceOpts,
+      modelKey,
+    );
 
     const systemMessage = promptPackage.systemPrompt;
     const userMessage = promptPackage.userPrompt;
@@ -348,13 +411,13 @@ export class OpenAIService extends BaseAIService {
         reasoning: isGPT5Model
           ? {
               effort: serviceOpts.reasoningEffort || "high",
-              summary: serviceOpts.reasoningSummaryType || "detailed"
+              summary: serviceOpts.reasoningSummaryType || "detailed",
             }
           : { summary: "detailed" },
         ...(isGPT5Model && {
-          text: { verbosity: previewVerbosity }
-        })
-      })
+          text: { verbosity: previewVerbosity },
+        }),
+      }),
     };
 
     const providerSpecificNotes = [
@@ -362,10 +425,13 @@ export class OpenAIService extends BaseAIService {
       "Temperature/JSON response_format not used; JSON enforced via prompt",
       systemPromptMode === "ARC"
         ? "System Prompt Mode: {ARC} - Using structured system prompt for better parsing"
-        : "System Prompt Mode: {None} - Old behavior (all content as user message)"
+        : "System Prompt Mode: {None} - Old behavior (all content as user message)",
     ];
 
-    const previewText = systemPromptMode === "ARC" ? userMessage : `${systemMessage}\n\n${userMessage}`;
+    const previewText =
+      systemPromptMode === "ARC"
+        ? userMessage
+        : `${systemMessage}\n\n${userMessage}`;
 
     return {
       provider: this.provider,
@@ -376,14 +442,14 @@ export class OpenAIService extends BaseAIService {
       templateInfo: {
         id: promptPackage.selectedTemplate?.id || "custom",
         name: promptPackage.selectedTemplate?.name || "Custom Prompt",
-        usesEmojis: promptPackage.selectedTemplate?.emojiMapIncluded || false
+        usesEmojis: promptPackage.selectedTemplate?.emojiMapIncluded || false,
       },
       promptStats: {
         characterCount: previewText.length,
         wordCount: previewText.split(/\s+/).length,
-        lineCount: previewText.split("\n").length
+        lineCount: previewText.split("\n").length,
       },
-      providerSpecificNotes: providerSpecificNotes.join("; ")
+      providerSpecificNotes: providerSpecificNotes.join("; "),
     };
   }
 
@@ -393,7 +459,7 @@ export class OpenAIService extends BaseAIService {
     temperature: number,
     serviceOpts: ServiceOptions,
     testCount: number,
-    taskId?: string
+    taskId?: string,
   ): Promise<NormalizedOpenAIResponse> {
     const { body } = buildResponsesPayload({
       promptPackage,
@@ -401,7 +467,7 @@ export class OpenAIService extends BaseAIService {
       temperature,
       serviceOpts,
       testCount,
-      taskId
+      taskId,
     });
 
     return await this.callResponsesAPI(body, modelKey);
@@ -411,7 +477,7 @@ export class OpenAIService extends BaseAIService {
     response: NormalizedOpenAIResponse,
     modelKey: string,
     captureReasoning: boolean,
-    puzzleId?: string
+    puzzleId?: string,
   ): ParsedOpenAIResponse {
     return parseResponse({
       response,
@@ -419,20 +485,24 @@ export class OpenAIService extends BaseAIService {
       captureReasoning,
       deps: {
         supportsStructuredOutput: this.supportsStructuredOutput(modelKey),
-        extractJson: (text: string, key: string) => this.extractJsonFromResponse(text, key)
-      }
+        extractJson: (text: string, key: string) =>
+          this.extractJsonFromResponse(text, key),
+      },
     });
   }
 
-  private async callResponsesAPI(body: any, modelKey: string): Promise<NormalizedOpenAIResponse> {
+  private async callResponsesAPI(
+    body: any,
+    modelKey: string,
+  ): Promise<NormalizedOpenAIResponse> {
     const startTime = Date.now();
     try {
-      const response = await openAIClient.responses.create(body);
+      const response = await getOpenAIClient().responses.create(body);
       (response as any).processingTime = Date.now() - startTime;
 
       return normalizeResponse(response, {
         modelKey,
-        calculateCost: (key, usage) => this.calculateResponseCost(key, usage)
+        calculateCost: (key, usage) => this.calculateResponseCost(key, usage),
       });
     } catch (error) {
       console.error(`[OpenAI] API call failed for ${modelKey}:`, error);

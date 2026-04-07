@@ -1,0 +1,21 @@
+{
+  "venvPath": ".",
+  "venv": "venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "include": [
+    "solver",
+    "scripts",
+    "external/re-arc",
+    "external/SnakeBench"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "venv",
+    "**/__pycache__",
+    "external/ARCEngine"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none"
+}

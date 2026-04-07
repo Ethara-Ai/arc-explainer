@@ -1,703 +1,532 @@
-/*
-Author: Claude (Windsurf Cascade)  
-Date: 2025-11-06
-Updated: 2026-01-01 - Added BYOK support for production environment
-PURPOSE: Ultra-compact ARC3 Agent Playground matching real ARC-AGI-3 site layout.
-Game selector above grid in center. Models from config. Minimal controls.
-BYOK enforcement: Production requires user API key; key is session-only, never stored.
-SRP/DRY check: Pass
-*/
-
-import React, { useState, useEffect } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Gamepad2, ArrowLeft, RefreshCw, Key, Brain, MessageSquare, Trophy } from 'lucide-react';
-import { requiresUserApiKey } from '@/lib/environmentPolicy';
-import { Link, useLocation, useSearch } from 'wouter';
-import { useArc3AgentStream } from '@/hooks/useArc3AgentStream';
-import { Arc3ReasoningViewer } from '@/components/arc3/Arc3ReasoningViewer';
-import { Arc3ToolTimeline } from '@/components/arc3/Arc3ToolTimeline';
-import { Arc3GamePanel } from '@/components/arc3/Arc3GamePanel';
-import { Arc3ConfigurationPanel } from '@/components/arc3/Arc3ConfigurationPanel';
-import { Arc3AgentControls } from '@/components/arc3/Arc3AgentControls';
-import { Arc3AgentVisionPreview } from '@/components/arc3/Arc3AgentVisionPreview';
-import { apiRequest } from '@/lib/queryClient';
-import { usePageMeta } from '@/hooks/usePageMeta';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Gamepad2,
+  ArrowLeft,
+  Loader2,
+  X,
+  Monitor,
+  Layers,
+  Activity,
+  Maximize2,
+  ArrowUpRight,
+} from "lucide-react";
+import { Link } from "wouter";
+import { usePageMeta } from "@/hooks/usePageMeta";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  useMultiAgentStream,
+  type ModelInfo,
+  type AgentSession,
+} from "@/hooks/useMultiAgentStream";
+import { Arc3MultiConfigPanel } from "@/components/arc3/Arc3MultiConfigPanel";
+import { Arc3SessionCard } from "@/components/arc3/Arc3SessionCard";
+import { Arc3LogTerminal } from "@/components/arc3/Arc3LogTerminal";
+import { Arc3ReasoningViewer } from "@/components/arc3/Arc3ReasoningViewer";
+import { Arc3Notepad } from "@/components/arc3/Arc3Notepad";
+import { Arc3ActionLog } from "@/components/arc3/Arc3ActionLog";
+import { Arc3GridVisualization } from "@/components/arc3/Arc3GridVisualization";
 
 interface GameInfo {
   game_id: string;
   title: string;
+  tags?: string[];
 }
-
-interface ModelInfo {
-  key: string;
-  name: string;
-  color: string;
-  premium: boolean;
-  cost: { input: string; output: string };
-  supportsTemperature?: boolean;
-  supportsStreaming?: boolean;
-  provider: string;
-  responseTime: { speed: string; estimate: string };
-  isReasoning?: boolean;
-  releaseDate?: string;
-}
-
-interface Arc3SystemPromptPresetMeta {
-  id: 'twitch' | 'playbook' | 'none';
+interface PresetMeta {
+  id: "twitch" | "playbook" | "none";
   label: string;
   description: string;
   isDefault: boolean;
 }
 
-// Normalize available_actions tokens from the API
-// API can send: integers (0=RESET, 1-7=ACTION1-7) or strings ('RESET', 'ACTION1', etc)
-const normalizeAvailableActionName = (token: string | number | null | undefined): string | null => {
-  if (token === null || token === undefined) {
-    return null;
-  }
-
-  // Handle numeric tokens: 0 = RESET, 1-7 = ACTION1-ACTION7
-  if (typeof token === 'number' && Number.isFinite(token)) {
-    if (token === 0) {
-      return 'RESET';
-    }
-    if (token >= 1 && token <= 7) {
-      return `ACTION${token}`;
-    }
-    console.warn('[ARC3] Unexpected numeric action token:', token);
-    return null;
-  }
-
-  // Handle string tokens
-  if (typeof token === 'string') {
-    const trimmed = token.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const upper = trimmed.toUpperCase();
-    const canonical = upper.replace(/[\s_-]+/g, '');
-
-    if (canonical === 'RESET') {
-      return 'RESET';
-    }
-
-    if (canonical.startsWith('ACTION')) {
-      const suffix = canonical.slice(6);
-      if (!suffix) {
-        return null;
-      }
-      const parsed = parseInt(suffix, 10);
-      if (Number.isNaN(parsed)) {
-        return null;
-      }
-      if (parsed === 0) {
-        return 'RESET';
-      }
-      if (parsed >= 1 && parsed <= 7) {
-        return `ACTION${parsed}`;
-      }
-      console.warn('[ARC3] Unexpected ACTION number in string:', parsed);
-      return null;
-    }
-
-    if (/^\d+$/.test(canonical)) {
-      const parsed = parseInt(canonical, 10);
-      if (parsed === 0) {
-        return 'RESET';
-      }
-      if (parsed >= 1 && parsed <= 7) {
-        return `ACTION${parsed}`;
-      }
-      console.warn('[ARC3] Unexpected numeric string token:', parsed);
-      return null;
-    }
-  }
-
-  return null;
-};
+const PLAYGROUND_MODELS: ModelInfo[] = [
+  {
+    key: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    color: "#D946EF",
+    provider: "Anthropic",
+  },
+  {
+    key: "kimi-k2.5",
+    name: "Kimi K2.5",
+    color: "#8B5CF6",
+    provider: "Cloud",
+  },
+  {
+    key: "gemini-3.1-pro-preview",
+    name: "Gemini 3.1 Pro",
+    color: "#3B82F6",
+    provider: "Google",
+  },
+  {
+    key: "gpt-5.4",
+    name: "GPT 5.4 Thinking",
+    color: "#10B981",
+    provider: "OpenAI",
+  },
+];
 
 export default function ARC3AgentPlayground() {
   usePageMeta({
-    title: 'ARC Explainer – ARC3 Agent Playground',
-    description:
-      'Watch real ARC-AGI-3 agents explore interactive games, stream reasoning traces, and inspect grid state transitions.',
-    canonicalPath: '/arc3/playground',
+    title: "ARC3 Multi-Agent Playground",
+    description: "Run multiple models on multiple games in parallel",
+    canonicalPath: "/arc3/playground",
   });
 
-  // URL state management for game selection
-  const [location, setLocation] = useLocation();
-  const searchParams = useSearch();
-  const urlGameId = React.useMemo(() => {
-    const params = new URLSearchParams(searchParams);
-    return params.get('game') || 'ls20';  // Default to ls20 if no game param
-  }, [searchParams]);
+  const {
+    sessions,
+    sessionList,
+    logs,
+    globalStatus,
+    isRunning,
+    startAll,
+    cancelAll,
+    reset,
+  } = useMultiAgentStream();
 
-  // Fetch games
   const [games, setGames] = useState<GameInfo[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
-  const [initialGrid, setInitialGrid] = useState<number[][][] | null>(null);
-
-  // Fetch models
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(true);
-
-  const fetchGames = async () => {
-    setGamesLoading(true);
-    try {
-      const response = await apiRequest('GET', '/api/arc3/games');
-      const data = await response.json();
-      if (data.success && Array.isArray(data.data)) {
-        setGames(data.data);
-        // Auto-load game from URL or default to ls20
-        if (data.data.length > 0) {
-          const targetGame = data.data.find((g: GameInfo) => g.game_id === urlGameId) || data.data[0];
-          setGameId(targetGame.game_id);
-          await fetchGameGrid(targetGame.game_id);
-        }
-      }
-    } catch (error) {
-      console.error('[ARC3] Failed to fetch games:', error);
-    } finally {
-      setGamesLoading(false);
-    }
-  };
-
-  const [systemPromptPresets, setSystemPromptPresets] = useState<Arc3SystemPromptPresetMeta[]>([]);
-  const [systemPromptPresetId, setSystemPromptPresetId] = useState<'twitch' | 'playbook' | 'none'>('playbook');
-
-  const fetchSystemPromptPresets = async () => {
-    try {
-      const response = await apiRequest('GET', '/api/arc3/system-prompts');
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        const presets = result.data as Arc3SystemPromptPresetMeta[];
-        setSystemPromptPresets(presets);
-
-        const defaultPreset = presets.find((p) => p.isDefault) || presets.find((p) => p.id === 'playbook');
-        if (defaultPreset) {
-          setSystemPromptPresetId(defaultPreset.id);
-        }
-      }
-    } catch (error) {
-      console.error('[ARC3] Failed to fetch system prompt presets:', error);
-    }
-  };
-
-  const fetchModels = async () => {
-    setModelsLoading(true);
-    try {
-      const response = await apiRequest('GET', '/api/models');
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setModels(data);
-        // Set default model if available
-        const defaultModel = data.find((m: ModelInfo) => m.key === 'gpt-5-nano-2025-08-07');
-        if (defaultModel) {
-          setModel(defaultModel.key);
-        }
-      }
-    } catch (error) {
-      console.error('[ARC3] Failed to fetch models:', error);
-    } finally {
-      setModelsLoading(false);
-    }
-  };
-
-  const fetchDefaultPrompt = async () => {
-    try {
-      const response = await apiRequest('GET', '/api/arc3/default-prompt');
-      const data = await response.json();
-      if (data.success && data.data?.prompt) {
-        setSystemPrompt(data.data.prompt);
-      }
-    } catch (error) {
-      console.error('[ARC3] Failed to fetch default prompt:', error);
-      // Fall back to what we have
-    }
-  };
-
-  const fetchGameGrid = async (gameId: string) => {
-    try {
-      const response = await apiRequest('POST', '/api/arc3/start-game', { game_id: gameId });
-      const data = await response.json();
-      if (data.success && data.data?.frame) {
-        const frameData = data.data;
-        console.log('[ARC3] Initial frame data from API:', frameData);
-        console.log('[ARC3] Available actions from API:', frameData.available_actions);
-        setInitialGrid(frameData.frame);
-
-        // Initialize the hook state with the game session so manual actions work immediately
-        initializeGameSession(frameData);
-      }
-    } catch (error) {
-      console.error('[ARC3] Failed to fetch game grid:', error);
-    }
-  };
+  const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [systemPrompt, setSystemPrompt] = useState("Loading default prompt...");
+  const [instructions, setInstructions] = useState(
+    "Explore the game systematically. Inspect the game state and try different actions to learn the rules.",
+  );
+  const [reasoningEffort, setReasoningEffort] = useState("low");
+  const [maxTurns, setMaxTurns] = useState(100000);
+  const [runsPerGame, setRunsPerGame] = useState(1);
+  const [maxSteps, setMaxSteps] = useState(200);
+  const [presets, setPresets] = useState<PresetMeta[]>([]);
+  const [presetId, setPresetId] = useState<string>("playbook");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
+  const selectedSession = selectedSessionId
+    ? (sessions[selectedSessionId] ?? null)
+    : null;
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
+  const expandedSession = expandedSessionId
+    ? (sessions[expandedSessionId] ?? null)
+    : null;
 
   useEffect(() => {
-    fetchGames();
-    fetchModels();
-    fetchDefaultPrompt();
-    fetchSystemPromptPresets();
+    if (!expandedSessionId) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedSessionId(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [expandedSessionId]);
+
+  useEffect(() => {
+    (async () => {
+      setGamesLoading(true);
+      try {
+        const r = await apiRequest("GET", "/api/arc3/local-games");
+        const d = await r.json();
+        if (d.success && Array.isArray(d.data)) setGames(d.data);
+      } catch {
+      } finally {
+        setGamesLoading(false);
+      }
+    })();
+    apiRequest("GET", "/api/arc3/default-prompt")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data?.prompt) setSystemPrompt(d.data.prompt);
+      })
+      .catch((err: unknown) =>
+        console.error("[ARC3AgentPlayground] init fetch failed:", err),
+      );
+    apiRequest("GET", "/api/arc3/system-prompts")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.data)) {
+          setPresets(d.data);
+          const def =
+            d.data.find((p: PresetMeta) => p.isDefault) ||
+            d.data.find((p: PresetMeta) => p.id === "playbook");
+          if (def) setPresetId(def.id);
+        }
+      })
+      .catch((err: unknown) =>
+        console.error("[ARC3AgentPlayground] init fetch failed:", err),
+      );
   }, []);
 
-  // When the preset changes, update the System Prompt textarea from backend templates.
   useEffect(() => {
-    if (systemPromptPresetId === 'none') {
-      setSystemPrompt('');
+    if (presetId === "none") {
+      setSystemPrompt("");
       return;
     }
+    apiRequest("GET", `/api/arc3/system-prompts/${presetId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data?.body) setSystemPrompt(d.data.body);
+      })
+      .catch((err: unknown) =>
+        console.error("[ARC3AgentPlayground] init fetch failed:", err),
+      );
+  }, [presetId]);
 
-    const loadPresetBody = async () => {
-      try {
-        const response = await apiRequest('GET', `/api/arc3/system-prompts/${systemPromptPresetId}`);
-        const result = await response.json();
-        if (result.success && result.data?.body && typeof result.data.body === 'string') {
-          setSystemPrompt(result.data.body);
-        }
-      } catch (error) {
-        console.error('[ARC3] Failed to load system prompt preset body:', error);
-      }
-    };
+  const toggleGame = useCallback((id: string) => {
+    setSelectedGames((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }, []);
+  const toggleModel = useCallback((key: string) => {
+    setSelectedModels((prev) => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  }, []);
 
-    loadPresetBody();
-  }, [systemPromptPresetId]);
-
-  // Agent config
-  const [gameId, setGameId] = useState(urlGameId);  // Initialize from URL param
-  const [agentName, setAgentName] = useState('ARC3 Explorer');
-  const [model, setModel] = useState<string>('');
-  const [maxTurns, setMaxTurns] = useState(100000);
-  const [reasoningEffort, setReasoningEffort] = useState<'minimal' | 'low' | 'medium' | 'high'>('low');
-  const [systemPrompt, setSystemPrompt] = useState('Loading default prompt...');
-  const [instructions, setInstructions] = useState(
-    'Explore the game systematically. Inspect the game state and try different actions to learn the rules.'
-  );
-  const [userMessage, setUserMessage] = useState('');
-  const [showUserInput, setShowUserInput] = useState(false);
-  // BYOK: API key state for production environment
-  const [userApiKey, setUserApiKey] = useState('');
-  const byokRequired = requiresUserApiKey();
-
-  // Onboarding modal - show once per session unless dismissed
-  const [showOnboarding, setShowOnboarding] = useState(true);
-
-  // Streaming
-  const { state, start, cancel, continueWithMessage, executeManualAction, initializeGameSession, setCurrentFrame, isPlaying, isPendingManualAction } = useArc3AgentStream();
-
-  // Handler for onboarding modal - starts game with defaults
-  const handleOnboardingStart = () => {
-    setShowOnboarding(false);
-    // Auto-start game with default settings (GPT-5 Nano, playbook prompt, ls20 game)
-    handleStart();
-  };
-
-  const handleStart = () => {
-    // BYOK: Block start if key required but not provided
-    if (byokRequired && !userApiKey.trim()) {
-      alert('API key is required in production. Please enter your OpenAI API key.');
-      return;
-    }
-
-    const skipDefaultSystemPrompt = systemPromptPresetId === 'none';
-
-    // Reset user input visibility (prevent showing "send message" during run)
-    setShowUserInput(false);
-    setUserMessage('');
-
-    start({
-      game_id: gameId,
-      agentName,
+  const handleStart = useCallback(() => {
+    const chosenModels = PLAYGROUND_MODELS.filter((m) =>
+      selectedModels.has(m.key),
+    );
+    startAll({
+      games: Array.from(selectedGames),
+      models: chosenModels,
+      runsPerGame,
+      maxSteps,
       systemPrompt,
       instructions,
-      model,
-      maxTurns,
       reasoningEffort,
-      systemPromptPresetId,
-      skipDefaultSystemPrompt,
-      // BYOK: Pass user API key if provided (required in production)
-      ...(userApiKey.trim() ? { apiKey: userApiKey.trim() } : {}),
+      maxTurns,
+      systemPromptPresetId: presetId,
+      skipDefaultSystemPrompt: presetId === "none",
     });
-  };
+    if (chosenModels.length > 0 && selectedGames.size > 0)
+      setSelectedSessionId(
+        `${chosenModels[0].key}::${Array.from(selectedGames)[0]}::0`,
+      );
+  }, [
+    selectedGames,
+    selectedModels,
+    systemPrompt,
+    instructions,
+    reasoningEffort,
+    maxTurns,
+    runsPerGame,
+    maxSteps,
+    presetId,
+    startAll,
+  ]);
 
-  // Show user input after agent pauses (at maxTurns) or completes
-  // But only if the game is still NOT_FINISHED (not in terminal state)
-  React.useEffect(() => {
-    if (state.status === 'paused' || (state.status === 'completed' && state.streamingStatus === 'completed')) {
-      // Check if game is in terminal state
-      const lastFrame = state.frames && state.frames.length > 0
-        ? state.frames[state.frames.length - 1]
-        : null;
-
-      // Only allow user input if game is NOT_FINISHED
-      if (lastFrame && lastFrame.state === 'NOT_FINISHED') {
-        setShowUserInput(true);
-      } else {
-        setShowUserInput(false);
-      }
-    }
-  }, [state.status, state.streamingStatus, state.frames]);
-
-  const handleUserMessageSubmit = async () => {
-    if (!userMessage.trim()) return;
-
-    try {
-      await continueWithMessage(userMessage);
-      setUserMessage('');
-      setShowUserInput(false);
-    } catch (error) {
-      console.error('[ARC3] Failed to continue:', error);
-    }
-  };
-
-  // Filter timeline entries by type
-  const toolEntries = state.timeline.filter(entry => entry.type === 'tool_call' || entry.type === 'tool_result');
-
-  // Extract latest frameImage from inspect_game_state tool results
-  const latestFrameImage = React.useMemo(() => {
-    const inspectResults = state.timeline
-      .filter(entry => entry.type === 'tool_result' && entry.label.includes('inspect_game_state'))
-      .reverse(); // Get most recent first
-
-    for (const result of inspectResults) {
-      try {
-        const parsed = JSON.parse(result.content);
-        if (parsed.frameImage && typeof parsed.frameImage === 'string') {
-          return parsed.frameImage;
-        }
-      } catch {
-        // Ignore parsing errors
-      }
-    }
-    return null;
-  }, [state.timeline]);
-
-  // Get available models (OpenAI only for ARC3 Agents SDK)
-  const availableModels = models.filter((m: ModelInfo) => 
-    m.provider === 'OpenAI' && 
-    !m.key.startsWith('grover-') &&
-    !m.color.includes('slate')
-  );
-
-  // Compute currentFrame directly from state to ensure re-renders trigger updates
-  const currentFrame = state.frames[state.currentFrameIndex] || null;
-
-  // Normalize available_actions from the API
-  // API returns integers [1, 2, 3, 4, 5, 6] but we use strings like 'ACTION1', 'ACTION2'
-  const normalizedAvailableActions = React.useMemo(() => {
-    const tokens = currentFrame?.available_actions;
-
-    // If no available_actions field or empty array, allow all actions (no restrictions)
-    if (!tokens || tokens.length === 0) {
-      console.log('[ARC3] No action restrictions (available_actions is empty or missing)');
-      return null;
-    }
-
-    const normalized = new Set<string>();
-    let fallbackAllowAll = false;
-
-    for (const token of tokens) {
-      const normalizedToken = normalizeAvailableActionName(token);
-      if (normalizedToken) {
-        normalized.add(normalizedToken);
-      } else if (token !== null && token !== undefined) {
-        // If we encounter an unexpected token format, log it and allow all actions
-        console.warn('[ARC3] Unexpected action token format:', token);
-        fallbackAllowAll = true;
-        break;
-      }
-    }
-
-    const result = fallbackAllowAll ? null : normalized;
-    console.log('[ARC3] Available actions:', {
-      raw: tokens,
-      normalized: result ? Array.from(result) : 'ALL',
-    });
-
-    return result;
-  }, [currentFrame]);
+  const activeCount = sessionList.filter(
+    (s) => s.status === "running" || s.status === "starting",
+  ).length;
+  const gridCols =
+    sessionList.length === 1
+      ? "grid-cols-1"
+      : sessionList.length === 2
+        ? "grid-cols-2"
+        : sessionList.length <= 4
+          ? "grid-cols-2"
+          : sessionList.length <= 6
+            ? "grid-cols-3"
+            : "grid-cols-4";
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Onboarding Modal - How AI Agents Work */}
-      <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">How to Work with an AI Agent</DialogTitle>
-            <DialogDescription>Understanding agent-based workflows</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* What is an AI Agent */}
-            <div className="space-y-2">
-              <h3 className="font-semibold">What is an AI Agent?</h3>
-              <p className="text-sm text-muted-foreground">
-                An AI agent is a system that observes its environment, reasons about what it observes, and takes actions based on that reasoning. Unlike a simple tool that responds to individual commands, an agent operates autonomously over multiple steps, maintaining state and learning from outcomes.
-              </p>
-            </div>
-
-            {/* The Agent Workflow */}
-            <div className="space-y-2">
-              <h3 className="font-semibold">The Agent Workflow</h3>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex gap-3">
-                  <div className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded h-fit">1</div>
-                  <div>
-                    <p className="font-medium text-foreground">Agent observes</p>
-                    <p>The agent examines the current state of the environment.</p>
-                  </div>
+    <div className="min-h-screen bg-[#0a0a0f]">
+      {/* ── Hero Header ── */}
+      <div className="relative overflow-hidden border-b border-white/5">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-0 left-1/3 w-80 h-80 bg-blue-500/20 rounded-full blur-[100px]" />
+          <div className="absolute top-0 right-1/3 w-80 h-80 bg-cyan-500/15 rounded-full blur-[100px]" />
+        </div>
+        <div className="relative max-w-[1400px] mx-auto px-6 py-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1 text-[11px] text-white/30 hover:text-white/60 transition-colors mb-3"
+              >
+                <ArrowLeft className="h-3 w-3" /> ARC-3
+              </Link>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center">
+                  <Gamepad2 className="h-5 w-5 text-blue-400" />
                 </div>
-                <div className="flex gap-3">
-                  <div className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded h-fit">2</div>
-                  <div>
-                    <p className="font-medium text-foreground">Agent reasons</p>
-                    <p>It analyzes what changed, what patterns it sees, and what hypotheses might explain the behavior.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded h-fit">3</div>
-                  <div>
-                    <p className="font-medium text-foreground">Agent reports findings</p>
-                    <p>It shares its analysis, observations, and next action plan with you.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded h-fit">4</div>
-                  <div>
-                    <p className="font-medium text-foreground">You provide guidance</p>
-                    <p>You review the agent's reasoning and either approve its plan, suggest a different approach, or provide new information.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded h-fit">5</div>
-                  <div>
-                    <p className="font-medium text-foreground">Agent executes</p>
-                    <p>The agent takes the next action based on your guidance and returns to step 1.</p>
-                  </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white tracking-tight">
+                    Playground
+                  </h1>
+                  <p className="text-sm text-white/30">
+                    Watch AI models play ARC-3 games live
+                  </p>
                 </div>
               </div>
             </div>
-
-            {/* Your Role */}
-            <div className="space-y-2">
-              <h3 className="font-semibold">Your Role</h3>
-              <p className="text-sm text-muted-foreground">
-                You are not controlling the agent directly. Instead, you are collaborating with it. Your responsibility is to evaluate its reasoning, catch errors, provide strategic direction, and give it information it might lack. The agent handles exploration, analysis, and execution.
-              </p>
-            </div>
-
-            {/* Key Note */}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <p className="text-sm text-slate-900">
-                <span className="font-medium">Important:</span> Agents are not perfect. They can make mistakes, misinterpret situations, or get stuck in loops. Your judgment and oversight are essential to effective collaboration.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => setShowOnboarding(false)}
-            >
-              Skip
-            </Button>
-            <Button
-              onClick={handleOnboardingStart}
-            >
-              Start
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Ultra-compact single-line header */}
-      <div className="border-b px-3 py-1">
-        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" asChild>
-              <Link href="/arc3">
-                <ArrowLeft className="h-2.5 w-2.5 mr-0.5" />
-                Back
-              </Link>
-            </Button>
-            <Gamepad2 className="h-3 w-3" />
-            <span className="text-xs font-semibold">ARC3 Playground</span>
-          </div>
-
-          {/* Inline game selector */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-muted-foreground">Game:</span>
-            {gamesLoading ? (
-              <RefreshCw className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
-            ) : (
-              <Select
-                value={gameId}
-                onValueChange={(newGameId) => {
-                  setGameId(newGameId);
-                  fetchGameGrid(newGameId);
-                  // Update URL to reflect game selection
-                  setLocation(`/arc3/playground?game=${newGameId}`);
-                }}
-                disabled={isPlaying}
+            <div className="flex items-center gap-3">
+              {isRunning && (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="relative">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-400 animate-ping opacity-40" />
+                  </div>
+                  <span className="text-xs font-medium text-emerald-300">
+                    {activeCount} running
+                  </span>
+                </div>
+              )}
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                  globalStatus === "running"
+                    ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
+                    : globalStatus === "completed"
+                      ? "border-blue-500/20 bg-blue-500/5 text-blue-400"
+                      : globalStatus === "error"
+                        ? "border-red-500/20 bg-red-500/5 text-red-400"
+                        : "border-white/10 bg-white/[0.02] text-white/30"
+                }`}
               >
-                <SelectTrigger className="h-6 text-[10px] min-w-[120px] py-0">
-                  <SelectValue>
-                    {games.find(g => g.game_id === gameId)?.title || gameId}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {games.map((game) => (
-                    <SelectItem key={game.game_id} value={game.game_id} className="text-xs">
-                      {game.title} ({game.game_id})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fetchGames}
-              className="h-6 w-6 p-0"
-            >
-              <RefreshCw className="h-2.5 w-2.5" />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant={state.status === 'running' ? 'default' : 'outline'} className="text-[10px] px-1.5 py-0">
-              {state.status}
-            </Badge>
+                {globalStatus}
+              </span>
+              {(globalStatus === "completed" ||
+                globalStatus === "cancelled" ||
+                globalStatus === "error") && (
+                <button
+                  onClick={reset}
+                  className="text-xs text-white/30 hover:text-white px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/5 transition-all"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Three-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-[1800px] mx-auto">
+      {/* ── Main 3-column layout ── */}
+      <div className="flex gap-5 items-start p-5 min-w-8x mx-auto">
+        {/* LEFT: Config */}
+        <div className="w-72 shrink-0">
+          <Arc3MultiConfigPanel
+            games={games}
+            gamesLoading={gamesLoading}
+            selectedGames={selectedGames}
+            toggleGame={toggleGame}
+            models={PLAYGROUND_MODELS}
+            selectedModels={selectedModels}
+            toggleModel={toggleModel}
+            systemPrompt={systemPrompt}
+            setSystemPrompt={setSystemPrompt}
+            instructions={instructions}
+            setInstructions={setInstructions}
+            reasoningEffort={reasoningEffort}
+            setReasoningEffort={setReasoningEffort}
+            maxTurns={maxTurns}
+            setMaxTurns={setMaxTurns}
+            runsPerGame={runsPerGame}
+            setRunsPerGame={setRunsPerGame}
+            maxSteps={maxSteps}
+            setMaxSteps={setMaxSteps}
+            systemPromptPresetId={presetId}
+            setSystemPromptPresetId={setPresetId}
+            systemPromptPresets={presets}
+            parallelGames={1}
+            setParallelGames={() => {}}
+            parallelRuns={1}
+            setParallelRuns={() => {}}
+            sequentialModels={false}
+            setSequentialModels={() => {}}
+            budgetGlobalUsd={null}
+            setBudgetGlobalUsd={() => {}}
+            budgetPerGameUsd={null}
+            setBudgetPerGameUsd={() => {}}
+            isRunning={isRunning}
+            onStart={handleStart}
+            onCancel={cancelAll}
+          />
+        </div>
 
-        {/* LEFT: Ultra-compact controls */}
-        <div className="lg:col-span-3 space-y-3">
+        {/* CENTER: Cards + Terminal */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {sessionList.length > 0 ? (
+            <div className={`grid gap-3 ${gridCols}`}>
+              {sessionList.map((s) => (
+                <Arc3SessionCard
+                  key={s.id}
+                  session={s}
+                  isSelected={selectedSessionId === s.id}
+                  onClick={() => setSelectedSessionId(s.id)}
+                  onExpand={() => setExpandedSessionId(s.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[#2a2a3a] p-16 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#12121a] border border-[#1e1e2e] flex items-center justify-center mx-auto mb-4">
+                <Gamepad2 className="h-6 w-6 text-gray-600" />
+              </div>
+              <p className="text-sm font-medium text-gray-400 mb-1">
+                Ready to play
+              </p>
+              <p className="text-xs text-gray-500">
+                Select games and models in the config panel, then hit Start
+              </p>
+            </div>
+          )}
+          <Arc3LogTerminal logs={logs} />
+        </div>
 
-          {/* BYOK: API Key Input - Only shown in production */}
-          {byokRequired && !isPlaying && (
-            <Card className="border-amber-200 bg-amber-50/50">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <CardTitle className="text-sm text-amber-900 flex items-center gap-1.5">
-                      <Key className="h-3.5 w-3.5" />
-                      API Key Required
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-1 text-amber-700">
-                      Your key is used for this session only and is never stored.
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-amber-300 text-amber-700">
-                    BYOK
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Label htmlFor="arc3-api-key" className="sr-only">API Key</Label>
-                    <Input
-                      id="arc3-api-key"
-                      type="password"
-                      placeholder="Enter your OpenAI API key..."
-                      value={userApiKey}
-                      onChange={(e) => setUserApiKey(e.target.value)}
-                      className="font-mono text-xs h-8"
+        {/* RIGHT: Reasoning + Notepad */}
+        <div className="w-80 shrink-0 space-y-3">
+          {selectedSession ? (
+            <>
+              <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#12121a] border border-[#1e1e2e]">
+                <div
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: selectedSession.modelColor }}
+                />
+                <span className="text-xs font-semibold text-gray-100">
+                  {selectedSession.modelName}
+                </span>
+                <span className="text-[#2a2a3a]">|</span>
+                <span className="text-xs text-emerald-400">
+                  {selectedSession.gameId}
+                </span>
+                <span className="text-[#2a2a3a]">|</span>
+                <span className="text-[10px] text-gray-500">
+                  Run {selectedSession.runIndex + 1}
+                </span>
+              </div>
+              <Arc3ReasoningViewer
+                timeline={selectedSession.timeline}
+                isPlaying={
+                  selectedSession.status === "running" ||
+                  selectedSession.status === "starting"
+                }
+                streamingMessage={selectedSession.streamingMessage}
+                streamingReasoning={selectedSession.streamingReasoning}
+              />
+              <Arc3ActionLog
+                frames={selectedSession.frames}
+                isPlaying={
+                  selectedSession.status === "running" ||
+                  selectedSession.status === "starting"
+                }
+                modelName={selectedSession.modelName}
+                modelColor={selectedSession.modelColor}
+              />
+              <Arc3Notepad
+                content={selectedSession.notepad}
+                modelName={selectedSession.modelName}
+                modelColor={selectedSession.modelColor}
+                gameId={selectedSession.gameId}
+              />
+            </>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[#2a2a3a] p-10 text-center">
+              <p className="text-xs text-gray-500">
+                {sessionList.length > 0
+                  ? "Click a card to inspect"
+                  : "Detail panel"}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Expanded Grid Modal ── */}
+      {expandedSession &&
+        (() => {
+          const frame =
+            expandedSession.frames[expandedSession.currentFrameIndex] || null;
+          const grid = frame?.frame || null;
+          const stColor =
+            frame?.state === "WIN"
+              ? "text-emerald-400"
+              : frame?.state === "GAME_OVER" || frame?.state === "LOSE"
+                ? "text-red-400"
+                : "text-amber-400";
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-8"
+              onClick={() => setExpandedSessionId(null)}
+            >
+              <div
+                className="bg-[#0e0e15] border border-white/10 rounded-2xl max-w-[85vw] max-h-[85vh] overflow-auto shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 sticky top-0 bg-[#0e0e15] z-10">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: expandedSession.modelColor }}
                     />
+                    <span className="text-sm font-semibold text-white">
+                      {expandedSession.modelName}
+                    </span>
+                    <span className="text-white/10">|</span>
+                    <span className="text-sm text-emerald-400/70">
+                      {expandedSession.gameId}
+                    </span>
+                    <span className="text-white/10">|</span>
+                    <span className="text-sm text-white/30">
+                      Run {expandedSession.runIndex + 1}
+                    </span>
+                    {frame && (
+                      <span
+                        className={`text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border border-white/10 ${stColor}`}
+                      >
+                        {frame.state === "NOT_FINISHED"
+                          ? "Playing"
+                          : frame.state}
+                      </span>
+                    )}
                   </div>
-                  {userApiKey.trim() && (
-                    <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">Key provided</span>
+                  <button
+                    onClick={() => setExpandedSessionId(null)}
+                    className="p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-center p-10 bg-black/30">
+                  {grid ? (
+                    <Arc3GridVisualization
+                      grid={grid}
+                      frameIndex={grid.length > 0 ? grid.length - 1 : 0}
+                      cellSize={24}
+                      showGrid={true}
+                    />
+                  ) : (
+                    <div className="text-center py-20">
+                      <Monitor className="mx-auto h-10 w-10 text-white/10 mb-3" />
+                      <p className="text-sm text-white/20">No grid data</p>
+                    </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Config - Hidden when playing */}
-          {!isPlaying && (
-            <Arc3ConfigurationPanel
-              systemPrompt={systemPrompt}
-              setSystemPrompt={setSystemPrompt}
-              instructions={instructions}
-              setInstructions={setInstructions}
-              model={model}
-              setModel={setModel}
-              reasoningEffort={reasoningEffort}
-              setReasoningEffort={setReasoningEffort}
-              maxTurns={maxTurns}
-              setMaxTurns={setMaxTurns}
-              availableModels={availableModels}
-              modelsLoading={modelsLoading}
-              isPlaying={isPlaying}
-              systemPromptPresetId={systemPromptPresetId}
-              setSystemPromptPresetId={setSystemPromptPresetId}
-              systemPromptPresets={systemPromptPresets}
-              onStart={handleStart}
-              onCancel={cancel}
-            />
-          )}
-
-          {/* User Message Injection - shown when agent completes */}
-          {showUserInput && (
-            <Arc3AgentControls
-              userMessage={userMessage}
-              setUserMessage={setUserMessage}
-              onSubmit={handleUserMessageSubmit}
-            />
-          )}
-
-          {/* Actions */}
-          <Arc3ToolTimeline
-            entries={toolEntries}
-            isPlaying={isPlaying}
-            streamingMessage={state.streamingMessage}
-          />
-        </div>
-
-        {/* CENTER: Game Panel (grid + actions + navigation) */}
-        <div className="lg:col-span-5 space-y-3">
-          <Arc3GamePanel
-            currentFrame={currentFrame}
-            frames={state.frames}
-            currentFrameIndex={state.currentFrameIndex}
-            executeManualAction={executeManualAction}
-            isPendingManualAction={isPendingManualAction}
-            isPlaying={isPlaying}
-            streamingMessage={state.streamingMessage}
-            toolEntries={toolEntries}
-            gameGuid={state.gameGuid}
-            gameId={state.gameId}
-            error={state.error}
-            setCurrentFrame={setCurrentFrame}
-            normalizedAvailableActions={normalizedAvailableActions}
-          />
-
-          {/* Agent Vision Preview - shows base64 image the agent sees */}
-          <Arc3AgentVisionPreview frameImage={latestFrameImage} />
-        </div>
-
-        {/* RIGHT: Streaming Reasoning - Auto-advance, larger text */}
-        <div className="lg:col-span-4">
-          <Arc3ReasoningViewer
-            timeline={state.timeline}
-            isPlaying={isPlaying}
-            streamingMessage={state.streamingMessage}
-            streamingReasoning={state.streamingReasoning}
-          />
-        </div>
-      </div>
+                {frame && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-white/5 text-xs">
+                    <div className="flex items-center gap-5 text-white/30">
+                      <span>
+                        Score:{" "}
+                        <span className="text-white font-semibold">
+                          {frame.score}
+                        </span>
+                      </span>
+                      <span>
+                        State: <span className={stColor}>{frame.state}</span>
+                      </span>
+                      <span>Steps: {expandedSession.stepCount}</span>
+                    </div>
+                    <span className="text-white/15 text-[10px]">
+                      ESC to close
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

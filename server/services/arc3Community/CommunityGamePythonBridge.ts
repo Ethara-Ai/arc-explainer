@@ -13,6 +13,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
+import { getPythonBin } from '../../config/env';
 
 // Use process.cwd() so the path resolves correctly both in dev (running from
 // source via tsx) and in production (esbuild bundles everything into dist/index.js,
@@ -20,10 +21,8 @@ import { logger } from '../../utils/logger';
 const PYTHON_RUNNER_PATH = path.join(process.cwd(), 'server', 'python', 'community_game_runner.py');
 const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds for game operations
 
-// Platform-aware Python binary: Alpine Docker only ships python3, Windows uses python
 function resolvePythonBin(): string {
-  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return getPythonBin();
 }
 
 export interface FrameData {

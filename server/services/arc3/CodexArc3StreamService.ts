@@ -23,15 +23,15 @@ export interface CodexStreamArc3Payload {
   instructions: string;
   model?: string;
   maxTurns?: number;
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-  harnessMode?: 'default' | 'cascade';
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  harnessMode?: "default" | "cascade";
   sessionId?: string;
   createdAt?: number;
   expiresAt?: number;
   existingGameGuid?: string;
   providerResponseId?: string | null;
   lastFrame?: FrameData;
-  systemPromptPresetId?: 'twitch' | 'playbook' | 'none';
+  systemPromptPresetId?: "twitch" | "playbook" | "none";
   skipDefaultSystemPrompt?: boolean;
 }
 
@@ -44,19 +44,32 @@ export interface CodexContinueStreamPayload extends CodexStreamArc3Payload {
 export const CODEX_SESSION_TTL_SECONDS = 900; // 15 minutes
 
 export class CodexArc3StreamService {
-  private readonly pendingSessions: Map<string, CodexStreamArc3Payload> = new Map();
-  private readonly pendingSessionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  private readonly continuationSessions: Map<string, CodexContinueStreamPayload> = new Map();
-  private readonly continuationSessionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly pendingSessions: Map<string, CodexStreamArc3Payload> =
+    new Map();
+  private readonly pendingSessionTimers: Map<
+    string,
+    ReturnType<typeof setTimeout>
+  > = new Map();
+  private readonly continuationSessions: Map<
+    string,
+    CodexContinueStreamPayload
+  > = new Map();
+  private readonly continuationSessionTimers: Map<
+    string,
+    ReturnType<typeof setTimeout>
+  > = new Map();
   private readonly apiClient: Arc3ApiClient;
   private readonly gameRunner: CodexArc3Runner;
 
   constructor() {
-    this.apiClient = new Arc3ApiClient(process.env.ARC3_API_KEY || '');
+    this.apiClient = new Arc3ApiClient(process.env.ARC3_API_KEY || "");
     this.gameRunner = new CodexArc3Runner(this.apiClient);
   }
 
-  savePendingPayload(payload: CodexStreamArc3Payload, ttlMs: number = CODEX_SESSION_TTL_SECONDS * 1000): string {
+  savePendingPayload(
+    payload: CodexStreamArc3Payload,
+    ttlMs: number = CODEX_SESSION_TTL_SECONDS * 1000,
+  ): string {
     const sessionId = payload.sessionId ?? nanoid();
     const now = Date.now();
     const expirationTimestamp = ttlMs > 0 ? now + ttlMs : now;
@@ -86,7 +99,10 @@ export class CodexArc3StreamService {
     }
   }
 
-  updatePendingPayload(sessionId: string, updates: Partial<CodexStreamArc3Payload>): void {
+  updatePendingPayload(
+    sessionId: string,
+    updates: Partial<CodexStreamArc3Payload>,
+  ): void {
     const existingPayload = this.pendingSessions.get(sessionId);
     if (!existingPayload) return;
 
@@ -110,10 +126,10 @@ export class CodexArc3StreamService {
       existingGameGuid?: string;
       lastFrame?: FrameData;
     },
-    ttlMs: number = CODEX_SESSION_TTL_SECONDS * 1000
+    ttlMs: number = CODEX_SESSION_TTL_SECONDS * 1000,
   ): void {
     if (!continuationData.previousResponseId) {
-      throw new Error('Continuation payload requires a previousResponseId.');
+      throw new Error("Continuation payload requires a previousResponseId.");
     }
 
     const now = Date.now();
@@ -134,7 +150,9 @@ export class CodexArc3StreamService {
     this.scheduleContinuationExpiration(sessionId, ttlMs);
   }
 
-  getContinuationPayload(sessionId: string): CodexContinueStreamPayload | undefined {
+  getContinuationPayload(
+    sessionId: string,
+  ): CodexContinueStreamPayload | undefined {
     return this.continuationSessions.get(sessionId);
   }
 
@@ -147,7 +165,10 @@ export class CodexArc3StreamService {
     }
   }
 
-  private scheduleContinuationExpiration(sessionId: string, ttlMs: number): void {
+  private scheduleContinuationExpiration(
+    sessionId: string,
+    ttlMs: number,
+  ): void {
     const existingTimer = this.continuationSessionTimers.get(sessionId);
     if (existingTimer) clearTimeout(existingTimer);
 
@@ -159,12 +180,13 @@ export class CodexArc3StreamService {
     const timer = setTimeout(() => {
       this.continuationSessions.delete(sessionId);
       this.continuationSessionTimers.delete(sessionId);
-      logger.debug(`[Codex ARC3 Streaming] Continuation payload for session ${sessionId} expired`, "codex-arc3-stream");
+      logger.debug(
+        `[Codex ARC3 Streaming] Continuation payload for session ${sessionId} expired`,
+        "codex-arc3-stream",
+      );
     }, ttlMs);
 
-    if (typeof (timer as any).unref === "function") {
-      (timer as any).unref();
-    }
+    timer.unref();
 
     this.continuationSessionTimers.set(sessionId, timer);
   }
@@ -181,38 +203,58 @@ export class CodexArc3StreamService {
     const timer = setTimeout(() => {
       this.pendingSessions.delete(sessionId);
       this.pendingSessionTimers.delete(sessionId);
-      logger.debug(`[Codex ARC3 Streaming] Pending payload for session ${sessionId} expired`, "codex-arc3-stream");
+      logger.debug(
+        `[Codex ARC3 Streaming] Pending payload for session ${sessionId} expired`,
+        "codex-arc3-stream",
+      );
     }, ttlMs);
 
-    if (typeof (timer as any).unref === "function") {
-      (timer as any).unref();
-    }
+    timer.unref();
 
     this.pendingSessionTimers.set(sessionId, timer);
   }
 
-  async startStreaming(_req: Request, payload: CodexStreamArc3Payload): Promise<string> {
+  async startStreaming(
+    _req: Request,
+    payload: CodexStreamArc3Payload,
+  ): Promise<string> {
     const sessionId = payload.sessionId ?? nanoid();
 
     try {
       if (!sseStreamManager.has(sessionId)) {
-        throw new Error("SSE session must be registered before starting Codex ARC3 streaming.");
+        throw new Error(
+          "SSE session must be registered before starting Codex ARC3 streaming.",
+        );
       }
 
       const streamingConfig = resolveStreamingConfig();
       if (!streamingConfig.enabled) {
-        sseStreamManager.error(sessionId, "STREAMING_DISABLED", "Streaming is disabled on this server.");
+        sseStreamManager.error(
+          sessionId,
+          "STREAMING_DISABLED",
+          "Streaming is disabled on this server.",
+        );
         return sessionId;
       }
 
-      const { game_id, agentName, systemPrompt, instructions, model, maxTurns, reasoningEffort, systemPromptPresetId, skipDefaultSystemPrompt } = payload;
+      const {
+        game_id,
+        agentName,
+        systemPrompt,
+        instructions,
+        model,
+        maxTurns,
+        reasoningEffort,
+        systemPromptPresetId,
+        skipDefaultSystemPrompt,
+      } = payload;
 
       // Send initial status
       sseStreamManager.sendEvent(sessionId, "stream.init", {
         state: "starting",
         game_id,
-        agentName: agentName || 'Codex ARC3 Agent',
-        provider: 'codex',
+        agentName: agentName || "Codex ARC3 Agent",
+        provider: "codex",
         timestamp: Date.now(),
       });
 
@@ -225,8 +267,8 @@ export class CodexArc3StreamService {
             metadata: {
               ...(chunk?.metadata ?? {}),
               game_id,
-              agentName: agentName || 'Codex ARC3 Agent',
-              provider: 'codex',
+              agentName: agentName || "Codex ARC3 Agent",
+              provider: "codex",
             },
           };
           sseStreamManager.sendEvent(sessionId, "stream.chunk", enrichedChunk);
@@ -237,13 +279,22 @@ export class CodexArc3StreamService {
         emitEvent: (event: string, data: any) => {
           const enrichedEvent =
             data && typeof data === "object"
-              ? { ...data, game_id, agentName: agentName || 'Codex ARC3 Agent', provider: 'codex' }
-              : { game_id, agentName: agentName || 'Codex ARC3 Agent', provider: 'codex' };
+              ? {
+                  ...data,
+                  game_id,
+                  agentName: agentName || "Codex ARC3 Agent",
+                  provider: "codex",
+                }
+              : {
+                  game_id,
+                  agentName: agentName || "Codex ARC3 Agent",
+                  provider: "codex",
+                };
           sseStreamManager.sendEvent(sessionId, event, enrichedEvent);
         },
         metadata: {
           game_id,
-          agentName: agentName || 'Codex ARC3 Agent',
+          agentName: agentName || "Codex ARC3 Agent",
         },
       };
 
@@ -268,18 +319,25 @@ export class CodexArc3StreamService {
         state: "running",
         game_id,
         message: "Codex agent is starting to play the game...",
-        provider: 'codex',
+        provider: "codex",
         timestamp: Date.now(),
       });
 
       // Run the Codex agent with streaming
-      const runResult = await this.gameRunner.runWithStreaming(runConfig, streamHarness);
+      const runResult = await this.gameRunner.runWithStreaming(
+        runConfig,
+        streamHarness,
+      );
 
-      const finalFrame = Array.isArray(runResult.frames) && runResult.frames.length > 0
-        ? (runResult.frames[runResult.frames.length - 1] as FrameData)
-        : payload.lastFrame;
+      const finalFrame =
+        Array.isArray(runResult.frames) && runResult.frames.length > 0
+          ? (runResult.frames[runResult.frames.length - 1] as FrameData)
+          : payload.lastFrame;
 
-      logger.info(`[Codex ARC3 Streaming] Caching final frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`, 'codex-arc3-stream');
+      logger.info(
+        `[Codex ARC3 Streaming] Caching final frame for session ${sessionId}; frame index=${runResult.frames?.length ?? 0}`,
+        "codex-arc3-stream",
+      );
 
       // Persist response metadata for future continuations
       this.updatePendingPayload(sessionId, {
@@ -293,12 +351,14 @@ export class CodexArc3StreamService {
       this.scheduleExpiration(sessionId, extendedTTL);
       logger.info(
         `[Codex ARC3 Streaming] Session ${sessionId} completed, extended TTL to ${extendedTTL}ms`,
-        "codex-arc3-stream"
+        "codex-arc3-stream",
       );
-
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`Codex ARC3 streaming failed: ${message}`, "codex-arc3-stream");
+      logger.error(
+        `Codex ARC3 streaming failed: ${message}`,
+        "codex-arc3-stream",
+      );
       sseStreamManager.error(sessionId, "STREAMING_FAILED", message);
       this.clearPendingPayload(sessionId);
     }
@@ -306,34 +366,58 @@ export class CodexArc3StreamService {
     return sessionId;
   }
 
-  async continueStreaming(_req: Request, payload: CodexContinueStreamPayload): Promise<string> {
+  async continueStreaming(
+    _req: Request,
+    payload: CodexContinueStreamPayload,
+  ): Promise<string> {
     const sessionId = payload.sessionId ?? nanoid();
 
     try {
       if (!sseStreamManager.has(sessionId)) {
-        throw new Error("SSE session must be registered before continuing Codex ARC3 streaming.");
+        throw new Error(
+          "SSE session must be registered before continuing Codex ARC3 streaming.",
+        );
       }
 
       const streamingConfig = resolveStreamingConfig();
       if (!streamingConfig.enabled) {
-        sseStreamManager.error(sessionId, "STREAMING_DISABLED", "Streaming is disabled on this server.");
+        sseStreamManager.error(
+          sessionId,
+          "STREAMING_DISABLED",
+          "Streaming is disabled on this server.",
+        );
         return sessionId;
       }
 
-      const { game_id, agentName, systemPrompt, instructions, model, maxTurns, reasoningEffort, userMessage, previousResponseId, existingGameGuid, systemPromptPresetId, skipDefaultSystemPrompt } = payload;
+      const {
+        game_id,
+        agentName,
+        systemPrompt,
+        instructions,
+        model,
+        maxTurns,
+        reasoningEffort,
+        userMessage,
+        previousResponseId,
+        existingGameGuid,
+        systemPromptPresetId,
+        skipDefaultSystemPrompt,
+      } = payload;
 
       if (!previousResponseId) {
-        throw new Error('Codex ARC3 continuation requires a previousResponseId.');
+        throw new Error(
+          "Codex ARC3 continuation requires a previousResponseId.",
+        );
       }
 
       // Send initial status
       sseStreamManager.sendEvent(sessionId, "stream.init", {
         state: "continuing",
         game_id,
-        agentName: agentName || 'Codex ARC3 Agent',
+        agentName: agentName || "Codex ARC3 Agent",
         hasPreviousResponse: !!previousResponseId,
         isContinuingGame: !!existingGameGuid,
-        provider: 'codex',
+        provider: "codex",
         timestamp: Date.now(),
       });
 
@@ -346,8 +430,8 @@ export class CodexArc3StreamService {
             metadata: {
               ...(chunk?.metadata ?? {}),
               game_id,
-              agentName: agentName || 'Codex ARC3 Agent',
-              provider: 'codex',
+              agentName: agentName || "Codex ARC3 Agent",
+              provider: "codex",
             },
           };
           sseStreamManager.sendEvent(sessionId, "stream.chunk", enrichedChunk);
@@ -358,13 +442,22 @@ export class CodexArc3StreamService {
         emitEvent: (event: string, data: any) => {
           const enrichedEvent =
             data && typeof data === "object"
-              ? { ...data, game_id, agentName: agentName || 'Codex ARC3 Agent', provider: 'codex' }
-              : { game_id, agentName: agentName || 'Codex ARC3 Agent', provider: 'codex' };
+              ? {
+                  ...data,
+                  game_id,
+                  agentName: agentName || "Codex ARC3 Agent",
+                  provider: "codex",
+                }
+              : {
+                  game_id,
+                  agentName: agentName || "Codex ARC3 Agent",
+                  provider: "codex",
+                };
           sseStreamManager.sendEvent(sessionId, event, enrichedEvent);
         },
         metadata: {
           game_id,
-          agentName: agentName || 'Codex ARC3 Agent',
+          agentName: agentName || "Codex ARC3 Agent",
         },
       };
 
@@ -373,15 +466,15 @@ export class CodexArc3StreamService {
         state: "running",
         game_id,
         message: existingGameGuid
-          ? `Codex continuing existing game ${existingGameGuid} with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`
-          : `Codex continuing with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`,
-        provider: 'codex',
+          ? `Codex continuing existing game ${existingGameGuid} with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? "..." : ""}"`
+          : `Codex continuing with user message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? "..." : ""}"`,
+        provider: "codex",
         timestamp: Date.now(),
       });
 
       logger.info(
         `[Codex ARC3 Continue] Running with userMessage (${userMessage.length} chars), previousResponseId=${!!previousResponseId}, existingGameGuid=${existingGameGuid}`,
-        "codex-arc3-stream"
+        "codex-arc3-stream",
       );
 
       // Run config for continuation
@@ -404,13 +497,20 @@ export class CodexArc3StreamService {
       };
 
       // Run the continuation
-      const runResult = await this.gameRunner.runWithStreaming(runConfig, streamHarness);
+      const runResult = await this.gameRunner.runWithStreaming(
+        runConfig,
+        streamHarness,
+      );
 
-      const finalFrame = Array.isArray(runResult.frames) && runResult.frames.length > 0
-        ? (runResult.frames[runResult.frames.length - 1] as FrameData)
-        : payload.lastFrame;
+      const finalFrame =
+        Array.isArray(runResult.frames) && runResult.frames.length > 0
+          ? (runResult.frames[runResult.frames.length - 1] as FrameData)
+          : payload.lastFrame;
 
-      logger.info(`[Codex ARC3 Streaming] Caching continuation frame for session ${sessionId}`, 'codex-arc3-stream');
+      logger.info(
+        `[Codex ARC3 Streaming] Caching continuation frame for session ${sessionId}`,
+        "codex-arc3-stream",
+      );
 
       this.updatePendingPayload(sessionId, {
         existingGameGuid: runResult.gameGuid,
@@ -423,12 +523,14 @@ export class CodexArc3StreamService {
       this.scheduleExpiration(sessionId, extendedTTL);
       logger.info(
         `[Codex ARC3 Streaming] Continuation ${sessionId} completed, extended TTL`,
-        "codex-arc3-stream"
+        "codex-arc3-stream",
       );
-
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error(`Codex ARC3 continuation failed: ${message}`, "codex-arc3-stream");
+      logger.error(
+        `Codex ARC3 continuation failed: ${message}`,
+        "codex-arc3-stream",
+      );
       sseStreamManager.error(sessionId, "STREAMING_FAILED", message);
       this.clearPendingPayload(sessionId);
     } finally {

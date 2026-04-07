@@ -38,7 +38,7 @@ export interface Region {
  * @returns 2D grid array [height][width] with values 0-15
  */
 export function extractGrid(frame: FrameData): number[][] {
-  const raw = frame.frame as any;
+  const raw: number[][][] | number[][][][] = frame.frame;
   if (!Array.isArray(raw) || raw.length === 0) {
     return [];
   }
@@ -49,11 +49,11 @@ export function extractGrid(frame: FrameData): number[][] {
     : raw;
 
   const grid2d = Array.isArray(layers) && layers.length > 0 ? layers[layers.length - 1] : [];
-  return Array.isArray(grid2d) ? grid2d : [];
+  return Array.isArray(grid2d) ? grid2d as number[][] : [];
 }
 
 export function extractLayerStack(frame: FrameData): number[][][] {
-  const raw = frame.frame as any;
+  const raw: number[][][] | number[][][][] = frame.frame;
   if (!Array.isArray(raw) || raw.length === 0) {
     return [];
   }

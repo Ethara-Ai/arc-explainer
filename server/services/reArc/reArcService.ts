@@ -19,6 +19,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import * as readline from 'readline';
 import path from 'path';
 import { logger } from '../../utils/logger.ts';
+import { getPythonBin } from '../../config/env';
 import {
   generateTaskIds,
   decodeTaskIds,
@@ -356,10 +357,7 @@ export interface GeneratedTask {
  * Follows pattern from SnakeBenchPythonBridge.ts
  */
 export function resolvePythonBin(): string {
-  if (process.env.PYTHON_BIN) {
-    return process.env.PYTHON_BIN;
-  }
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return getPythonBin();
 }
 
 /**

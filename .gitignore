@@ -11,6 +11,7 @@ nul
 /data/explained
 logs/
 /temp
+shared/test/logs/
 
 JFPuget.mp4
 external/SnakeBench/backend/completed_games_videos/
@@ -19,3 +20,8 @@ jBudd1.mp4
 jBudd2.mp3
 jBudd2.mp4
 /coverage
+/venv
+.sisyphus
+Interactive Puzzle Environment Data Collection.md
+/data/puzzle-evals/*
+.claude

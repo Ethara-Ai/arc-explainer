@@ -1,12 +1,3 @@
-/**
- * Author: GPT-5 Codex
- * Date: 2026-02-06T19:45:00Z
- * PURPOSE: Canvas-based ARC3 replay player for NDJSON/JSONL recordings.
- *          Supports responsive grid rendering, optional frame caps for landing previews,
- *          and completion callbacks for replay rotation.
- * SRP/DRY check: Pass - encapsulates replay parsing/rendering without duplicating landing layout logic.
- */
-
 import React, {
   useCallback,
   useEffect,

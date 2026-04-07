@@ -36,6 +36,7 @@ import {
   type ValidationResult,
   type MultiValidationResult,
 } from '../responseValidator.js';
+import { getPythonBin } from '../../config/env';
 
 /**
  * Event types emitted by the Poetiq Python wrapper
@@ -209,7 +210,7 @@ export class PoetiqService {
   private agentsRunner?: PoetiqAgentsRunner;
 
   constructor() {
-    this.pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+    this.pythonBin = getPythonBin();
     this.wrapperPath = path.join(process.cwd(), 'server', 'python', 'poetiq_wrapper.py');
   }
 

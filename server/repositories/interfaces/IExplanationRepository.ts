@@ -71,7 +71,7 @@ export interface ExplanationData {
   groverBestProgram?: string | null;
   iterationCount?: number | null;
   // NEW: LLM Council multi-model consensus fields
-  councilMode?: 'solve' | 'assess' | null;
+  councilMode?: "solve" | "assess" | null;
   councilStage1Results?: any | null;
   councilStage2Rankings?: any | null;
   councilStage3Synthesis?: any | null;
@@ -132,7 +132,7 @@ export interface ExplanationResponse {
   groverBestProgram: string | null;
   iterationCount: number | null;
   // NEW: LLM Council multi-model consensus fields
-  councilMode: 'solve' | 'assess' | null;
+  councilMode: "solve" | "assess" | null;
   councilStage1Results: any | null;
   councilStage2Rankings: any | null;
   councilStage3Synthesis: any | null;
@@ -140,6 +140,10 @@ export interface ExplanationResponse {
   councilAssessedExplanationIds: number[] | null;
   councilAggregateRankings: any | null;
   councilPromptUsed: string | null;
+  // BeeTree ensemble metadata
+  beetreeModelResults: any | null;
+  beetreeCostBreakdown: any | null;
+  beetreeTokenUsage: any | null;
   createdAt: string;
   helpfulVotes?: number;
   notHelpfulVotes?: number;
@@ -233,14 +237,19 @@ export interface IExplanationRepository {
   /**
    * Get the most recent explanation for a puzzle
    */
-  getExplanationForPuzzle(puzzleId: string): Promise<ExplanationResponse | null>;
+  getExplanationForPuzzle(
+    puzzleId: string,
+  ): Promise<ExplanationResponse | null>;
 
   /**
    * Get all explanations for a puzzle (multiple models/attempts)
    * @param puzzleId - The puzzle ID to get explanations for
    * @param correctnessFilter - Optional filter: 'all', 'correct', or 'incorrect'
    */
-  getExplanationsForPuzzle(puzzleId: string, correctnessFilter?: 'all' | 'correct' | 'incorrect'): Promise<ExplanationResponse[]>;
+  getExplanationsForPuzzle(
+    puzzleId: string,
+    correctnessFilter?: "all" | "correct" | "incorrect",
+  ): Promise<ExplanationResponse[]>;
 
   /**
    * Get paginated explanation summaries for a puzzle.
@@ -249,10 +258,10 @@ export interface IExplanationRepository {
   getExplanationSummariesForPuzzle(
     puzzleId: string,
     options?: {
-      correctnessFilter?: 'all' | 'correct' | 'incorrect';
+      correctnessFilter?: "all" | "correct" | "incorrect";
       limit?: number;
       offset?: number;
-    }
+    },
   ): Promise<ExplanationSummaryPage>;
 
   /**
@@ -275,5 +284,7 @@ export interface IExplanationRepository {
    * Returns only fields actually used by puzzle list views (8 fields vs 37)
    * Dramatically reduces temp file usage and improves query performance
    */
-  getBulkExplanationStatusLight(puzzleIds: string[]): Promise<BulkExplanationStatusLight>;
+  getBulkExplanationStatusLight(
+    puzzleIds: string[],
+  ): Promise<BulkExplanationStatusLight>;
 }

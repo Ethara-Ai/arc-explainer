@@ -15,7 +15,7 @@ export function AppHeader() {
   return (
     <>
       <OpenRouterSyncBanner />
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-12 items-center justify-between gap-4 px-4">
         <Link href="/">
           <div className="flex items-center gap-3 cursor-pointer group min-w-fit">
@@ -33,8 +33,8 @@ export function AppHeader() {
               </div>
             </div>
             <div className="flex flex-col">
-              <div className="font-bold text-base leading-tight whitespace-nowrap">ARC Explainer</div>
-              <div className="text-[9px] text-muted-foreground leading-none whitespace-nowrap">ARC 1 🟥 ARC 2 🟨 ARC 3 🟦</div>
+              <div className="font-bold text-base leading-tight whitespace-nowrap">ARC 3 x Ethara AI</div>
+              {/* <div className="text-[9px] text-muted-foreground leading-none whitespace-nowrap"></div> */}
             </div>
           </div>
         </Link>

@@ -13,7 +13,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/**/*.test.ts', 'client/**/*.test.ts', 'client/**/*.test.tsx'],
+    include: ['tests/**/*.test.ts', 'client/**/*.test.ts', 'client/**/*.test.tsx', 'shared/test/**/*.test.ts'],
     exclude: [
       'node_modules/**',
       'dist/**',

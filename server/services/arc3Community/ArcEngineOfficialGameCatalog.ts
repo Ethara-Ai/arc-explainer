@@ -11,6 +11,7 @@ SRP/DRY check: Pass - single responsibility: official game catalog shared by rou
 */
 
 import { spawn } from 'child_process';
+import { getPythonBin } from '../../config/env';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -77,8 +78,7 @@ const OFFICIAL_GAME_OVERRIDES: Record<string, OfficialGameOverride> = {
 };
 
 function resolvePythonBin(): string {
-  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return getPythonBin();
 }
 
 function stableNegativeId(input: string): number {

@@ -1,0 +1,11 @@
+# Upstream files — DO NOT auto-format.
+# Formatting changes create merge conflicts on upstream sync.
+# Only make semantic changes to these files.
+server/routes.ts
+server/services/openai.ts
+server/services/openrouter.ts
+server/services/arc3/Arc3RealGameRunner.ts
+server/services/arc3/Arc3StreamService.ts
+server/services/arc3/Arc3OpenAIStreamService.ts
+server/services/arc3/tools/Arc3ToolFactory.ts
+client/src/pages/ARC3AgentPlayground.tsx

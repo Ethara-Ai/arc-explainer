@@ -44,6 +44,12 @@ export const errorHandler = (
     modelKey
   });
 
+  // SSE endpoints may have already flushed headers — cannot send JSON after that
+  if (res.headersSent) {
+    try { res.end(); } catch {}
+    return;
+  }
+
   if (error instanceof AppError) {
     return res.status(error.statusCode).json({
       success: false,

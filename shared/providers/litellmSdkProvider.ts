@@ -1,0 +1,431 @@
+import path from "path";
+import { fileURLToPath } from "url";
+import {
+  BaseProvider,
+  type ProviderResponse,
+  type ChooseActionParams,
+  buildActionDescription,
+  createProviderResponse,
+  sanitizeRawResponse,
+} from "./base";
+import { computeCost } from "./pricing";
+import { PythonBridgeProcess } from "./PythonBridgeProcess";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+import { existsSync } from "fs";
+
+/**
+ * Resolve the Python bridge script path at call time (not module load).
+ * Tries co-located path first (__dirname), then project root (cwd) as fallback
+ * for esbuild bundles where __dirname points to dist/.
+ * Throws with both tried paths if neither exists.
+ */
+function resolveBridgeScript(): string {
+  const colocated = path.join(__dirname, "litellmBridge.py");
+  if (existsSync(colocated)) return colocated;
+
+  const projectRoot = path.join(
+    process.cwd(),
+    "shared",
+    "providers",
+    "litellmBridge.py",
+  );
+  if (existsSync(projectRoot)) {
+    console.log(
+      `[LiteLLMSdkProvider] Bridge script not at ${colocated}, using fallback: ${projectRoot}`,
+    );
+    return projectRoot;
+  }
+
+  throw new Error(
+    `[LiteLLMSdkProvider] Bridge script not found at:\n  - ${colocated}\n  - ${projectRoot}`,
+  );
+}
+
+/** Default timeout per LLM call, ms */
+const DEFAULT_CALL_TIMEOUT_MS = 120_000;
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+function buildTool(validActions: string[]): Record<string, any> {
+  return {
+    type: "function",
+    function: {
+      name: "play_action",
+      description: "Choose your next action in the puzzle game.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            description: buildActionDescription(validActions),
+          },
+          reasoning: {
+            type: "string",
+            description: "Brief explanation of why you chose this action",
+          },
+          notepad_update: {
+            type: "string",
+            description:
+              "Updated notepad contents. Repeat current contents to keep unchanged.",
+          },
+        },
+        required: ["action", "reasoning", "notepad_update"],
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LiteLLMSdkProvider
+// ---------------------------------------------------------------------------
+
+export class LiteLLMSdkProvider extends BaseProvider {
+  private _modelId: string;
+  private _litellmModel: string;
+  private _displayName: string;
+  private _pricingModelId: string;
+  private _supportsVision: boolean;
+  private _enableThinking: boolean;
+  private _apiKey: string;
+  private _baseUrl: string | null;
+  private _timeoutMs: number;
+  private _cloudRegion: string | null;
+  private _providerHint: "claude" | "gemini" | "openai" | "kimi" | null;
+  private _reasoningEffort: string | null;
+  private _additionalHeaders: Record<string, string> | null;
+  private _vertexProject: string | null;
+  private _vertexLocation: string | null;
+  private _vertexCredentials: string | null;
+
+  // Subprocess management (delegated to PythonBridgeProcess)
+  private _bridge: PythonBridgeProcess | null = null;
+
+  constructor(opts: {
+    apiKey: string;
+    modelId: string;
+    litellmModel: string;
+    displayName?: string;
+    pricingModelId?: string | null;
+    supportsVision?: boolean;
+    enableThinking?: boolean;
+    baseUrl?: string | null;
+    timeoutMs?: number;
+    cloudRegion?: string;
+    providerHint?: "claude" | "gemini" | "openai" | "kimi" | null;
+    reasoningEffort?: string | null;
+    additionalHeaders?: Record<string, string> | null;
+    vertexProject?: string | null;
+    vertexLocation?: string | null;
+    vertexCredentials?: string | null;
+  }) {
+    super();
+    this._apiKey = opts.apiKey;
+    this._modelId = opts.modelId;
+    this._litellmModel = opts.litellmModel;
+    this._displayName = opts.displayName ?? "LiteLLM SDK Model";
+    this._pricingModelId = opts.pricingModelId ?? opts.modelId;
+    this._supportsVision = opts.supportsVision ?? true;
+    this._enableThinking = opts.enableThinking ?? true;
+    this._baseUrl = opts.baseUrl ?? null;
+    this._timeoutMs = opts.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
+    this._cloudRegion = opts.cloudRegion ?? null;
+    this._providerHint = opts.providerHint ?? null;
+    this._reasoningEffort = opts.reasoningEffort ?? null;
+    this._additionalHeaders = opts.additionalHeaders ?? null;
+    this._vertexProject = opts.vertexProject ?? null;
+    this._vertexLocation = opts.vertexLocation ?? null;
+    this._vertexCredentials = opts.vertexCredentials ?? null;
+  }
+
+  get modelName(): string {
+    return this._displayName;
+  }
+
+  get modelId(): string {
+    return this._modelId;
+  }
+
+  // ── Public API ──────────────────────────────────────────────────────────
+
+  async chooseActionAsync(
+    params: ChooseActionParams,
+    signal?: AbortSignal,
+  ): Promise<ProviderResponse> {
+    const {
+      systemPrompt,
+      conversationHistory,
+      currentObservation,
+      validActions,
+      imageB64,
+    } = params;
+
+    // Ensure subprocess is running (lazy init + auto-restart)
+    this._ensureBridge();
+
+    // Build messages in OpenAI Chat Completions format (LiteLLM accepts this)
+    const messages: Array<Record<string, any>> = [
+      { role: "system", content: systemPrompt },
+    ];
+    for (const turn of conversationHistory) {
+      messages.push({ role: turn.role, content: turn.content });
+    }
+
+    // User message with optional image
+    const userContent: Array<Record<string, any>> = [
+      { type: "text", text: currentObservation },
+    ];
+    if (imageB64 && this._supportsVision) {
+      let imgData = imageB64;
+      if (imgData.startsWith("data:"))
+        imgData = imgData.split(",")[1] ?? imgData;
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${imgData}`,
+          detail: "low",
+        },
+      });
+    }
+    messages.push({ role: "user", content: userContent });
+
+    // Build the request payload for the Python bridge
+    const request: Record<string, any> = {
+      type: "completion",
+      model: this._litellmModel,
+      messages,
+      tools: [buildTool(validActions)],
+      max_tokens: 8192,
+      api_key: this._apiKey,
+      timeout_ms: this._timeoutMs,
+    };
+
+    // Claude with extended thinking rejects forced tool_choice (returns 400)
+    if (this._providerHint === "claude" && this._enableThinking) {
+      request.tool_choice = "auto";
+    } else if (this._providerHint === "openai") {
+      // OpenAI Responses API rejects Chat Completions tool_choice object format
+      request.tool_choice = "required";
+    } else {
+      request.tool_choice = {
+        type: "function",
+        function: { name: "play_action" },
+      };
+    }
+
+    if (this._baseUrl) {
+      request.base_url = this._baseUrl;
+    }
+
+    if (this._cloudRegion) {
+      request.aws_region_name = this._cloudRegion;
+    }
+
+    if (this._additionalHeaders) {
+      request.extra_headers = this._additionalHeaders;
+    }
+
+    if (this._vertexProject) {
+      request.vertex_project = this._vertexProject;
+    }
+    if (this._vertexLocation) {
+      request.vertex_location = this._vertexLocation;
+    }
+    if (this._vertexCredentials) {
+      request.vertex_credentials = this._vertexCredentials;
+    }
+
+    if (this._enableThinking) {
+      switch (this._providerHint) {
+        case "claude": {
+          // Claude requires max_tokens > thinking.budget_tokens.
+          // Budget tokens are consumed from max_tokens, so we need enough
+          // room for both the thinking budget and the actual output.
+          const thinkingBudget = 8192;
+          const minMaxTokens = thinkingBudget + 1024; // budget + headroom for output
+          request.max_tokens = Math.max(request.max_tokens ?? 0, minMaxTokens);
+          request.extra_body = {
+            thinking: { type: "enabled", budget_tokens: thinkingBudget },
+          };
+          break;
+        }
+        case "openai":
+          request.reasoning_effort = this._reasoningEffort ?? "high";
+          break;
+        case "gemini":
+          // Gemini 3.1 thinking is model-intrinsic — no explicit config needed
+          break;
+        case "kimi":
+          // Kimi K2.5 thinking is on by default — no explicit param needed
+          break;
+        default:
+          request.extra_body = {
+            thinking: { type: "enabled", budget_tokens: 8192 },
+          };
+          break;
+      }
+    }
+
+    console.log(
+      `[LiteLLMSdkProvider] Sending to bridge: model=${request.model} cloudRegion=${request.aws_region_name ?? "(none)"} apiKeyLen=${request.api_key?.length ?? 0}`,
+    );
+
+    // Send request and wait for multiplexed response
+    const result = await this._bridge!.sendRequest(
+      request,
+      signal,
+      this._timeoutMs,
+    );
+    // Cast to `any` for deeply-nested Python bridge JSON
+    const responseData = result.data as Record<string, any>;
+
+    // Extract usage from the bridge response
+    const usage = responseData.usage ?? {};
+    let inputTokens = (usage.prompt_tokens ?? 0) as number;
+    const outputTokens = (usage.completion_tokens ?? 0) as number;
+    let reasoningTokens = (usage.reasoning_tokens ?? 0) as number;
+    let cachedInputTokens = (usage.cached_tokens ?? 0) as number;
+    let cacheWriteTokens = (usage.cache_creation_input_tokens ?? 0) as number;
+
+    // Anthropic cache fields (LiteLLM pass-through)
+    if (usage.cache_read_input_tokens > 0 && cachedInputTokens === 0) {
+      cachedInputTokens = usage.cache_read_input_tokens as number;
+    }
+
+    // ── Reasoning tokens + thinkingText extraction ───────────────────────────
+    // LiteLLM normalizes reasoning to message.reasoning_content for Anthropic/Kimi.
+    let thinkingText: string | null = null;
+
+    if (responseData.response?.choices?.length) {
+      const msg = responseData.response.choices[0]?.message;
+
+      // reasoning_content field (LiteLLM unified field for Claude/Kimi thinking)
+      if (msg?.reasoning_content && typeof msg.reasoning_content === "string") {
+        thinkingText = msg.reasoning_content;
+      }
+
+      // Anthropic thinking blocks in content array (fallback)
+      if (!thinkingText && Array.isArray(msg?.content)) {
+        const thinkingChunks: string[] = [];
+        for (const block of msg.content) {
+          if (block.type === "thinking" && block.thinking) {
+            thinkingChunks.push(String(block.thinking));
+          }
+        }
+        if (thinkingChunks.length > 0) {
+          thinkingText = thinkingChunks.join("\n\n");
+        }
+      }
+    }
+
+    // Adjust input tokens to exclude cached
+    inputTokens = Math.max(0, inputTokens - cachedInputTokens);
+
+    // Parse action from tool call in the response
+    let action = "SKIP";
+    let reasoning = "";
+    let notepadUpdate: string | null = null;
+
+    const choices = responseData.response?.choices;
+    if (choices?.length) {
+      const choice = choices[0];
+      const toolCalls = choice?.message?.tool_calls;
+
+      if (toolCalls?.length) {
+        const tc = toolCalls[0];
+        const fnArgs = tc?.function?.arguments;
+        if (fnArgs) {
+          try {
+            const args =
+              typeof fnArgs === "string" ? JSON.parse(fnArgs) : fnArgs;
+            action = String(args.action ?? "SKIP").trim();
+            reasoning = String(args.reasoning ?? "").trim();
+            notepadUpdate = args.notepad_update ?? null;
+            if (notepadUpdate !== null)
+              notepadUpdate = String(notepadUpdate).trim();
+          } catch {
+            [action, reasoning, notepadUpdate] = this.parseActionResponse(
+              typeof fnArgs === "string" ? fnArgs : JSON.stringify(fnArgs),
+              validActions,
+            );
+          }
+        }
+      } else if (choice?.message?.content) {
+        const content = choice.message.content;
+        [action, reasoning, notepadUpdate] = this.parseActionResponse(
+          typeof content === "string" ? content : JSON.stringify(content),
+          validActions,
+        );
+      }
+    }
+
+    action = BaseProvider.matchAction(action, validActions);
+
+    // Cost: prefer LiteLLM-computed cost, fallback to our pricing table
+    let costUsd = responseData.cost_usd as number | null;
+    if (costUsd == null || costUsd <= 0) {
+      try {
+        costUsd = computeCost(
+          this._pricingModelId,
+          inputTokens,
+          outputTokens,
+          reasoningTokens,
+          cachedInputTokens,
+          cacheWriteTokens,
+        );
+      } catch {
+        // Fallback rough estimate
+        costUsd =
+          (inputTokens / 1_000_000) * 2.0 + (outputTokens / 1_000_000) * 10.0;
+      }
+    }
+
+    return createProviderResponse({
+      action,
+      reasoning,
+      notepadUpdate,
+      inputTokens,
+      outputTokens,
+      reasoningTokens,
+      thinkingText,
+      costUsd,
+      rawResponse: sanitizeRawResponse(responseData ?? null),
+      cachedInputTokens,
+      cacheWriteTokens,
+    });
+  }
+
+  /**
+   * Gracefully shut down the Python subprocess.
+   * Called when the provider is no longer needed.
+   */
+  async shutdown(): Promise<void> {
+    if (this._bridge) {
+      await this._bridge.shutdown();
+    }
+  }
+
+  // ── Private: Bridge Lifecycle ───────────────────────────────────────────
+
+  /**
+   * Lazily create the PythonBridgeProcess on first use.
+   */
+  private _ensureBridge(): void {
+    if (!this._bridge) {
+      this._bridge = new PythonBridgeProcess({
+        bridgeScript: resolveBridgeScript(),
+        displayName: this._displayName,
+        logPrefix: "LiteLLMSdkProvider",
+        callTimeoutMs: this._timeoutMs,
+      });
+    }
+  }
+}

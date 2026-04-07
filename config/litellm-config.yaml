@@ -1,0 +1,41 @@
+# LiteLLM Proxy Configuration
+# Start: litellm --config config/litellm-config.yaml --port 4000
+#
+# All eval models route through this proxy. The proxy handles:
+# - Cost calculation (x-litellm-response-cost header)
+# - Prompt caching per provider
+# - Provider-specific request/response translation
+# - Rate limiting and retries
+
+model_list:
+  # GPT-5.4 (OpenAI)
+  - model_name: gpt-5.4
+    litellm_params:
+      model: gpt-5.4
+      api_key: os.environ/GPT_API_KEY
+
+  # Gemini 3.1 Pro (Google AI Studio)
+  - model_name: gemini/gemini-3.1-pro-preview
+    litellm_params:
+      model: gemini/gemini-3.1-pro-preview
+      api_key: os.environ/GEMINI_STUDIO_API_KEY
+
+  # Claude Opus 4.6 (Bedrock)
+  - model_name: bedrock/anthropic.claude-opus-4-6-v1
+    litellm_params:
+      model: bedrock/anthropic.claude-opus-4-6-v1
+
+  # Kimi k2.5 (Bedrock)
+  - model_name: bedrock/moonshotai.kimi-k2.5
+    litellm_params:
+      model: bedrock/moonshotai.kimi-k2.5
+
+  # Claude Opus 4.6 (Native Anthropic API - account 1)
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY_1
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false

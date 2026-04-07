@@ -6,9 +6,13 @@ PURPOSE: Shared helper functions for Arc3RealGameRunner run() and runWithStreami
 SRP/DRY check: Pass — focused on run-mode-agnostic utilities.
 */
 
-import type { Arc3GameState, Arc3AgentRunConfig, Arc3RunSummary } from '../types.ts';
-import type { FrameData } from '../Arc3ApiClient.ts';
-import { buildArc3DefaultPrompt } from '../prompts.ts';
+import type {
+  Arc3GameState,
+  Arc3AgentRunConfig,
+  Arc3RunSummary,
+} from "../types.ts";
+import type { FrameData } from "../Arc3ApiClient.ts";
+import { buildArc3DefaultPrompt } from "../prompts.ts";
 
 /**
  * Select system prompt based on config options.
@@ -17,7 +21,7 @@ import { buildArc3DefaultPrompt } from '../prompts.ts';
  * - Otherwise, use default ARC3 prompt
  */
 export function selectSystemPrompt(config: Arc3AgentRunConfig): string {
-  const explicit = config.systemPrompt?.trim() || '';
+  const explicit = config.systemPrompt?.trim() || "";
   const skipDefault = config.skipDefaultSystemPrompt === true;
 
   if (skipDefault) {
@@ -33,19 +37,45 @@ export function selectSystemPrompt(config: Arc3AgentRunConfig): string {
 
 /**
  * Build combined instructions from base system prompt and operator guidance.
+ * Optionally appends notepad instructions when notepad is enabled.
  */
-export function buildCombinedInstructions(config: Arc3AgentRunConfig): string {
+export function buildCombinedInstructions(
+  config: Arc3AgentRunConfig,
+  options?: { notepadEnabled?: boolean },
+): string {
   const baseSystemPrompt = selectSystemPrompt(config);
   const operatorGuidance = config.instructions?.trim();
 
-  if (operatorGuidance) {
-    return baseSystemPrompt
-      ? `${baseSystemPrompt}\n\nOperator guidance: ${operatorGuidance}`
-      : operatorGuidance;
+  const parts: string[] = [];
+
+  if (baseSystemPrompt) {
+    parts.push(baseSystemPrompt);
   }
 
-  return baseSystemPrompt || '';
+  if (operatorGuidance) {
+    parts.push(`Operator guidance: ${operatorGuidance}`);
+  }
+
+  if (options?.notepadEnabled) {
+    parts.push(NOTEPAD_INSTRUCTIONS);
+  }
+
+  return parts.join("\n\n") || "";
 }
+
+/**
+ * Notepad instructions appended to the system prompt when notepad tools are available.
+ */
+const NOTEPAD_INSTRUCTIONS = `## Persistent Notepad
+You have access to a persistent notepad via write_notes and read_notes tools.
+Use it to record:
+- Discovered rules and patterns
+- Strategies that work (or don't)
+- Key observations about the grid
+- Action sequences to try
+
+The notepad survives context window trimming — your earlier notes won't be lost.
+Write notes frequently to preserve important discoveries.`;
 
 /**
  * Map ARC3 API state strings to Arc3GameState type.
@@ -53,16 +83,16 @@ export function buildCombinedInstructions(config: Arc3AgentRunConfig): string {
  */
 export function mapState(state: string): Arc3GameState {
   switch (state) {
-    case 'NOT_PLAYED':
-      return 'NOT_PLAYED';
-    case 'IN_PROGRESS':
-      return 'IN_PROGRESS';
-    case 'WIN':
-      return 'WIN';
-    case 'GAME_OVER':
-      return 'GAME_OVER';
-    case 'NOT_FINISHED':
-      return 'NOT_FINISHED';
+    case "NOT_PLAYED":
+      return "NOT_PLAYED";
+    case "IN_PROGRESS":
+      return "IN_PROGRESS";
+    case "WIN":
+      return "WIN";
+    case "GAME_OVER":
+      return "GAME_OVER";
+    case "NOT_FINISHED":
+      return "NOT_FINISHED";
     default:
       throw new Error(`Unexpected game state from ARC3 API: ${state}`);
   }
@@ -74,15 +104,15 @@ export function mapState(state: string): Arc3GameState {
 export function buildRunSummary(
   currentFrame: FrameData,
   gameId: string,
-  framesCount: number
+  framesCount: number,
 ): Arc3RunSummary {
   return {
     state: mapState(currentFrame.state),
     score: currentFrame.score,
     stepsTaken: currentFrame.action_counter ?? Math.max(0, framesCount - 1),
-    simpleActionsUsed: [],  // ARC3 doesn't track this the same way
-    coordinateGuesses: 0,   // ARC3 doesn't track this separately
+    simpleActionsUsed: [], // ARC3 doesn't track this the same way
+    coordinateGuesses: 0, // ARC3 doesn't track this separately
     scenarioId: gameId,
-    scenarioName: gameId,   // Use gameId as name for now
+    scenarioName: gameId, // Use gameId as name for now
   };
 }

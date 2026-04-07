@@ -1,12 +1,3 @@
-/*
-Author: GPT-5 Codex
-Date: 2026-02-06T00:00:00Z
-PURPOSE: ARC3-only pixel UI primitives for ARC3 community pages (landing + upload). Provides
-         palette-locked theme tokens and reusable components (panels, buttons, strips, cards)
-         while allowing optional per-page CSS variable overrides for bright or dark directions.
-SRP/DRY check: Pass - centralizes ARC3 palette logic and avoids duplicated page styling.
-*/
-
 import React from 'react';
 import { ARC3_COLORS, getContrastColor } from '@/utils/arc3Colors';
 import { cn } from '@/lib/utils';

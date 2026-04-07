@@ -7,6 +7,9 @@
  */
 /**
  * server/services/pythonBridge.ts
+ */
+import { getPythonBin } from '../config/env';
+/**
  *
  * PythonBridge manages spawning the Saturn Python wrapper and streaming
  * NDJSON progress events back to Node for broadcasting and persistence.
@@ -156,13 +159,7 @@ export type BeetreeBridgeEvent =
 
 export class PythonBridge {
   private resolvePythonBin(): string {
-    // Allow override via env
-    if (process.env.PYTHON_BIN) {
-      return process.env.PYTHON_BIN;
-    }
-    
-    // Auto-detect: Windows uses 'python', Linux containers use 'python3'
-    return process.platform === 'win32' ? 'python' : 'python3';
+    return getPythonBin();
   }
 
   private resolveWrapperPath(): string {

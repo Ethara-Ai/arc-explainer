@@ -43,6 +43,19 @@ export interface CodexArc3StreamHarness {
   };
 }
 
+/** Extended event data from Agents SDK raw model stream events */
+interface AgentModelStreamEvent {
+  type: string;
+  event?: {
+    type: string;
+    delta?: string;
+    text?: string;
+    content_index?: number;
+  };
+  delta?: string;
+  text?: string;
+}
+
 export class CodexArc3Runner {
   constructor(private readonly apiClient: Arc3ApiClient) {}
 
@@ -624,10 +637,10 @@ export class CodexArc3Runner {
       switch (event.type) {
         case 'raw_model_stream_event':
           {
-            const eventData = event.data;
+            const eventData = event.data as AgentModelStreamEvent;
 
             if (eventData.type === 'model') {
-              const modelEvent = (eventData as any).event;
+              const modelEvent = eventData.event;
 
               // Handle reasoning deltas
               if (modelEvent?.type === 'response.reasoning_text.delta') {
@@ -783,7 +796,7 @@ export class CodexArc3Runner {
       gameGuid: gameGuid || 'unknown',
       finalOutput: finalOutput?.trim() ? finalOutput.trim() : undefined,
       timeline,
-      frames: frames as any[],
+      frames,
       summary,
       usage: {
         requests: usage.requests,

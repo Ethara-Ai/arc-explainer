@@ -9,6 +9,8 @@ SRP/DRY check: Pass - route layer remains focused on HTTP contracts while delega
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { Arc3RealGameRunner } from '../services/arc3/Arc3RealGameRunner';
 import { Arc3ApiClient } from '../services/arc3/Arc3ApiClient';
@@ -135,6 +137,76 @@ router.get(
   '/games',
   asyncHandler(async (req: Request, res: Response) => {
     const games = await arc3ApiClient.listGames();
+    res.json(formatResponse.success(games));
+  }),
+);
+
+/**
+ * GET /api/arc3/local-games
+ * Scan puzzle-environments/ARC-AGI-3/environment_files/ directory for locally available ARC3 games.
+ * Each subfolder containing a metadata.json is treated as a game.
+ */
+router.get(
+  '/local-games',
+  asyncHandler(async (req: Request, res: Response) => {
+    const envDir = path.resolve(process.cwd(), 'puzzle-environments', 'ARC-AGI-3', 'environment_files');
+    const games: Array<{ game_id: string; title: string; tags?: string[]; local_dir?: string }> = [];
+
+    try {
+      if (!fs.existsSync(envDir)) {
+        return res.json(formatResponse.success(games));
+      }
+
+      const entries = fs.readdirSync(envDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        // Look for metadata.json inside versioned subdirectories (e.g., fm01/v1/metadata.json)
+        const gameDir = path.join(envDir, entry.name);
+        const versionDirs = fs.readdirSync(gameDir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .sort((a, b) => b.name.localeCompare(a.name)); // latest version first
+
+        for (const vDir of versionDirs) {
+          const metaPath = path.join(gameDir, vDir.name, 'metadata.json');
+          if (fs.existsSync(metaPath)) {
+            try {
+              const raw = fs.readFileSync(metaPath, 'utf-8');
+              const meta = JSON.parse(raw);
+              games.push({
+                game_id: meta.game_id || entry.name,
+                title: meta.title || meta.game_id || entry.name,
+                tags: meta.tags || [],
+                local_dir: meta.local_dir || `puzzle-environments/ARC-AGI-3/environment_files/${entry.name}/${vDir.name}`,
+              });
+            } catch (parseErr) {
+              logger.warn(`[arc3/local-games] Failed to parse ${metaPath}: ${parseErr}`);
+            }
+            break; // use the latest version only
+          }
+        }
+
+        // Also check for metadata.json directly in the game folder (no version subdirectory)
+        const directMeta = path.join(gameDir, 'metadata.json');
+        if (!games.find(g => g.game_id === entry.name) && fs.existsSync(directMeta)) {
+          try {
+            const raw = fs.readFileSync(directMeta, 'utf-8');
+            const meta = JSON.parse(raw);
+            games.push({
+              game_id: meta.game_id || entry.name,
+              title: meta.title || meta.game_id || entry.name,
+              tags: meta.tags || [],
+              local_dir: meta.local_dir || `puzzle-environments/ARC-AGI-3/environment_files/${entry.name}`,
+            });
+          } catch (parseErr) {
+            logger.warn(`[arc3/local-games] Failed to parse ${directMeta}: ${parseErr}`);
+          }
+        }
+      }
+    } catch (err) {
+      logger.error(`[arc3/local-games] Failed to scan puzzle-environments/: ${err}`);
+    }
+
     res.json(formatResponse.success(games));
   }),
 );

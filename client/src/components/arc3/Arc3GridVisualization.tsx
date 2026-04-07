@@ -22,15 +22,6 @@ interface Arc3GridVisualizationProps {
   };
 }
 
-interface FrameData {
-  frame: number[][];
-  score: number;
-  state: string;
-  action_counter: number;
-  max_actions: number;
-  full_reset: boolean;
-}
-
 export const Arc3GridVisualization: React.FC<Arc3GridVisualizationProps> = ({
   grid,
   frameIndex = 0,
@@ -68,15 +59,6 @@ export const Arc3GridVisualization: React.FC<Arc3GridVisualizationProps> = ({
     ].join(',');
     return `${grid?.length || 0}-${frameIndex}-${h}-${w}-[${corners}]-${Date.now()}`;
   }, [grid?.length, frameIndex, currentFrame]);
-
-  // Debug logging for grid updates
-  console.log('[Arc3GridVisualization] Render:', {
-    gridLayers: grid?.length || 0,
-    frameIndex,
-    currentFrameSize: `${height}x${width}`,
-    lastAction: lastAction?.type,
-    gridSignature,
-  });
 
   // Calculate canvas dimensions
   const canvasWidth = width * cellSize;

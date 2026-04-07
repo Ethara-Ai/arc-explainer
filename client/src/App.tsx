@@ -1,12 +1,3 @@
-/*
-Author: Cascade (ChatGPT)
-Date: 2026-02-10
-PURPOSE: Client-side router for ARC Explainer. Centralizes route registrations across all
-         feature areas (puzzles, streaming, admin tools, ARC3 community, RE-ARC, Worm Arena),
-         including ARC3 community submission review tooling under the admin section.
-SRP/DRY check: Pass - kept as a routing table only and verified existing routes remain intact.
-*/
-
 import { Switch, Route, useParams } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -42,19 +33,22 @@ import ModelDebate from "@/pages/ModelDebate";
 import LLMCouncil from "@/pages/LLMCouncil";
 import ModelComparisonPage from "@/pages/ModelComparisonPage";
 import HuggingFaceUnionAccuracy from "@/pages/HuggingFaceUnionAccuracy";
+import PuzzleEvalDashboard from "@/pages/PuzzleEvalDashboard";
+import TrajectoryViewer from "@/pages/TrajectoryViewer";
+import EvalOverview from "@/pages/EvalOverview";
+import EvalRunPage from "@/pages/EvalRunPage";
 import About from "@/pages/About";
-import ClaudeCodeGuide from "@/pages/ClaudeCodeGuide";
 import ARC3Browser from "@/pages/ARC3Browser";
 import ARC3AgentPlayground from "@/pages/ARC3AgentPlayground";
+import ARC3AgentSdkPlayground from "@/pages/ARC3AgentSdkPlayground";
 import Arc3OpenRouterPlayground from "@/pages/Arc3OpenRouterPlayground";
 import Arc3CodexPlayground from "@/pages/Arc3CodexPlayground";
 import Arc3HaikuPlayground from "@/pages/Arc3HaikuPlayground";
 import Arc3GamesBrowser from "@/pages/Arc3GamesBrowser";
 import Arc3GameSpoiler from "@/pages/Arc3GameSpoiler";
-import Arc3Story from "@/pages/Arc3Story";
-import { 
-  Arc3ArchiveLanding, 
-  Arc3ArchivePlayground 
+import {
+  Arc3ArchiveLanding,
+  Arc3ArchivePlayground,
 } from "@/pages/arc3-archive";
 import {
   CommunityLanding,
@@ -81,6 +75,7 @@ import ReArcDataset from "@/pages/ReArcDataset";
 import ReArcSubmissions from "@/pages/ReArcSubmissions";
 import TaskEfficiency from "@/pages/TaskEfficiency";
 import Redirect from "@/components/Redirect";
+import { PlaygroundErrorBoundary } from "@/components/PlaygroundErrorBoundary";
 import DebateTaskRedirect from "@/pages/DebateTaskRedirect";
 
 import ReArcErrorShowcase from "@/pages/dev/ReArcErrorShowcase";
@@ -89,19 +84,22 @@ import LandingPage from "@/pages/LandingPage";
 function LegacyArc3GameRedirect() {
   const params = useParams<{ gameId: string }>();
   const gameId = params.gameId ?? "";
-  return <Redirect to={`/arc3/games/${gameId}`} />;
+  return <Redirect to={`/arc3/archive/games/${gameId}`} />;
 }
 
 function Router() {
   return (
     <PageLayout>
       <Switch>
-        <Route path="/" component={LandingPage} />
+        <Route path="/" component={EvalOverview} />
         <Route path="/browser" component={PuzzleBrowser} />
         <Route path="/trading-cards" component={PuzzleTradingCards} />
         <Route path="/hall-of-fame" component={HumanTradingCards} />
         <Route path="/hall-of-fame/johan-land" component={JohanLandTribute} />
-        <Route path="/human-cards" component={() => <Redirect to="/hall-of-fame" />} />
+        <Route
+          path="/human-cards"
+          component={() => <Redirect to="/hall-of-fame" />}
+        />
         <Route path="/discussion" component={PuzzleDiscussion} />
         <Route path="/discussion/:taskId" component={PuzzleDiscussion} />
         <Route path="/analytics" component={AnalyticsOverview} />
@@ -120,7 +118,10 @@ function Router() {
         {/* Admin routes */}
         <Route path="/admin" component={AdminHub} />
         <Route path="/admin/models" component={ModelManagement} />
-        <Route path="/admin/arc3-submissions" component={AdminArc3Submissions} />
+        <Route
+          path="/admin/arc3-submissions"
+          component={AdminArc3Submissions}
+        />
         <Route path="/admin/ingest-hf" component={HuggingFaceIngestion} />
         <Route path="/admin/openrouter" component={AdminOpenRouter} />
 
@@ -139,30 +140,53 @@ function Router() {
         <Route path="/model-comparison" component={ModelComparisonPage} />
         <Route path="/scoring" component={HuggingFaceUnionAccuracy} />
         <Route path="/about" component={About} />
-        <Route path="/cc" component={ClaudeCodeGuide} />
         <Route path="/llm-reasoning" component={LLMReasoning} />
-        <Route path="/llm-reasoning/advanced" component={LLMReasoningAdvanced} />
-        {/* ARC3 - Story & explainer page (primary landing) */}
-        <Route path="/arc3" component={Arc3Story} />
-        <Route path="/arc3/games/:gameId" component={Arc3GameSpoiler} />
-        {/* ARC3 Community - game play, gallery, uploads (secondary) */}
+        <Route
+          path="/llm-reasoning/advanced"
+          component={LLMReasoningAdvanced}
+        />
+        {/* ARC3 Community - user-uploaded games platform (new main landing) */}
+        <Route path="/arc3" component={CommunityLanding} />
         <Route path="/arc3/playground" component={ARC3AgentPlayground} />
+        <Route path="/arc3/agentsdk-playground">
+          {() => (
+            <PlaygroundErrorBoundary>
+              <ARC3AgentSdkPlayground />
+            </PlaygroundErrorBoundary>
+          )}
+        </Route>
         <Route path="/arc3/gallery" component={CommunityGallery} />
         <Route path="/arc3/play/:gameId" component={CommunityGamePlay} />
         <Route path="/arc3/upload" component={GameSubmissionPage} />
-        {/* Legacy archive routes - redirect to new structure */}
-        <Route path="/arc3/archive" component={() => <Redirect to="/arc3" />} />
-        <Route path="/arc3/archive/games" component={() => <Redirect to="/arc3" />} />
-        <Route path="/arc3/archive/games/:gameId" component={LegacyArc3GameRedirect} />
-        <Route path="/arc3/archive/playground" component={Arc3ArchivePlayground} />
+        {/* Legacy ARC3 games now hosted under archive root */}
+        <Route path="/arc3/archive" component={Arc3ArchiveLanding} />
+        <Route path="/arc3/archive/games" component={Arc3GamesBrowser} />
+        <Route path="/arc3/archive/games/:gameId" component={Arc3GameSpoiler} />
+        <Route
+          path="/arc3/archive/playground"
+          component={Arc3ArchivePlayground}
+        />
+        {/* Legacy path redirects */}
+        <Route
+          path="/arc3/games"
+          component={() => <Redirect to="/arc3/archive/games" />}
+        />
+        <Route path="/arc3/games/:gameId" component={LegacyArc3GameRedirect} />
         {/* RE-ARC - self-service dataset generation and evaluation */}
         <Route path="/re-arc" component={ReArc} />
         <Route path="/re-arc/submissions" component={ReArcSubmissions} />
         <Route path="/dataset-viewer" component={ReArcDataset} />
+        {/* Eval Harness Dashboard + Trajectory Viewer */}
+        <Route path="/eval" component={EvalOverview} />
+        <Route path="/eval/run" component={EvalRunPage} />
+        <Route path="/eval/trajectory/:runId" component={TrajectoryViewer} />
         {/* SnakeBench = official upstream project at snakebench.com */}
         <Route path="/snakebench" component={SnakeBenchEmbed} />
         {/* Backwards compatibility redirect */}
-        <Route path="/snake-arena" component={() => <Redirect to="/worm-arena" />} />
+        <Route
+          path="/snake-arena"
+          component={() => <Redirect to="/worm-arena" />}
+        />
         {/* Worm Arena = our local junior version with bring-your-own-key functionality */}
         <Route path="/worm-arena" component={WormArena} />
         <Route path="/worm-arena/live" component={WormArenaLive} />
@@ -170,8 +194,14 @@ function Router() {
         <Route path="/worm-arena/matches" component={WormArenaMatches} />
         <Route path="/worm-arena/models" component={WormArenaModels} />
         <Route path="/worm-arena/stats" component={WormArenaStats} />
-        <Route path="/worm-arena/skill-analysis" component={WormArenaSkillAnalysis} />
-        <Route path="/worm-arena/distributions" component={WormArenaDistributions} />
+        <Route
+          path="/worm-arena/skill-analysis"
+          component={WormArenaSkillAnalysis}
+        />
+        <Route
+          path="/worm-arena/distributions"
+          component={WormArenaDistributions}
+        />
         <Route path="/worm-arena/rules" component={WormArenaRules} />
         <Route path="/puzzle/:taskId" component={PuzzleExaminer} />
         <Route path="/examine/:taskId" component={PuzzleExaminer} />
@@ -182,7 +212,10 @@ function Router() {
             See docs/reference/frontend/DEV_ROUTES.md for pattern guide */}
         {import.meta.env.DEV && (
           <>
-            <Route path="/dev/re-arc/error-display" component={ReArcErrorShowcase} />
+            <Route
+              path="/dev/re-arc/error-display"
+              component={ReArcErrorShowcase}
+            />
           </>
         )}
 

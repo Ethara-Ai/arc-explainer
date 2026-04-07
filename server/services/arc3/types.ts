@@ -23,7 +23,7 @@ export interface Arc3AgentRunResult {
   scorecardId: string;  // CRITICAL: Scorecard ID for ARC API continuations (stays open across runs)
   finalOutput?: string;
   timeline: Arc3RunTimelineEntry[];
-  frames: any[];
+  frames: FrameData[];
   summary: Arc3RunSummary;
   usage: {
     requests: number;
@@ -61,6 +61,5 @@ export interface Arc3AgentRunConfig {
   systemPromptPresetId?: Arc3PromptPresetId; // One-word preset id: 'twitch' | 'playbook' | 'none'
   skipDefaultSystemPrompt?: boolean; // When true, never fall back to any default system prompt
   harnessMode?: 'default' | 'cascade'; // Optional qualitative harness toggle (defaults to existing math harness)
-  scaffold?: 'linear' | 'three-system' | 'world-model'; // Scaffolding strategy for arc3 agent loop (default: 'linear')
-  anthropicApiKey?: string; // BYOK OAuth or API key for ARC3 Haiku runner (supports sk-ant-oat01- prefix)
+  contextWindow?: number; // Sliding context window in "turns" (default 50). Keeps last N×4 AgentInputItems to prevent context overflow.
 }

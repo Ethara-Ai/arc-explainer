@@ -12,9 +12,18 @@ import { formatResponse } from "../utils/responseFormatter";
 import { sseStreamManager } from "../services/streaming/SSEStreamManager";
 import { arc3OpenAIStreamService } from "../services/arc3/Arc3OpenAIStreamService";
 import { Arc3ApiClient } from "../services/arc3/Arc3ApiClient";
+import { logger } from "../utils/logger";
+import { getAvailableGames } from "../services/arc3/shared/gameDiscovery";
 
 const router = Router();
-const arc3ApiClient = new Arc3ApiClient(process.env.ARC3_API_KEY || "");
+const arc3ApiKey = process.env.ARC3_API_KEY || "";
+if (!arc3ApiKey) {
+  logger.warn(
+    "[arc3OpenAI routes] ARC3_API_KEY is not set. Manual actions will fail until configured.",
+    "arc3-openai",
+  );
+}
+const arc3ApiClient = new Arc3ApiClient(arc3ApiKey);
 
 const runSchema = z.object({
   game_id: z.string().trim(),
@@ -28,7 +37,15 @@ const runSchema = z.object({
 const manualActionSchema = z.object({
   game_id: z.string().trim(),
   guid: z.string().trim(),
-  action: z.enum(["RESET", "ACTION1", "ACTION2", "ACTION3", "ACTION4", "ACTION5", "ACTION6"]),
+  action: z.enum([
+    "RESET",
+    "ACTION1",
+    "ACTION2",
+    "ACTION3",
+    "ACTION4",
+    "ACTION5",
+    "ACTION6",
+  ]),
   coordinates: z.tuple([z.number().int(), z.number().int()]).optional(),
   card_id: z.string().trim().optional(),
 });
@@ -38,7 +55,14 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = runSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json(formatResponse.error("VALIDATION_ERROR", parsed.error.errors.map((e) => e.message).join("; ")));
+      return res
+        .status(400)
+        .json(
+          formatResponse.error(
+            "VALIDATION_ERROR",
+            parsed.error.errors.map((e) => e.message).join("; "),
+          ),
+        );
     }
 
     const sessionId = arc3OpenAIStreamService.savePayload(parsed.data);
@@ -52,7 +76,9 @@ router.get(
     const { sessionId } = req.params;
     const payload = arc3OpenAIStreamService.getPayload(sessionId);
     if (!payload) {
-      return res.status(404).json(formatResponse.error("SESSION_NOT_FOUND", "No pending session"));
+      return res
+        .status(404)
+        .json(formatResponse.error("SESSION_NOT_FOUND", "No pending session"));
     }
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -65,7 +91,10 @@ router.get(
     res.flushHeaders();
 
     try {
-      await arc3OpenAIStreamService.startStreaming(req, { ...payload, sessionId });
+      await arc3OpenAIStreamService.startStreaming(req, {
+        ...payload,
+        sessionId,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       sseStreamManager.error(sessionId, "STREAMING_ERROR", message);
@@ -87,21 +116,45 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = manualActionSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json(formatResponse.error("VALIDATION_ERROR", parsed.error.errors.map((e) => e.message).join("; ")));
+      return res
+        .status(400)
+        .json(
+          formatResponse.error(
+            "VALIDATION_ERROR",
+            parsed.error.errors.map((e) => e.message).join("; "),
+          ),
+        );
     }
 
     const { game_id, guid, action, coordinates, card_id } = parsed.data;
     if (action === "ACTION6" && !coordinates) {
-      return res.status(400).json(formatResponse.error("MISSING_COORDINATES", "ACTION6 requires coordinates [x, y]."));
+      return res
+        .status(400)
+        .json(
+          formatResponse.error(
+            "MISSING_COORDINATES",
+            "ACTION6 requires coordinates [x, y].",
+          ),
+        );
     }
     if (action === "RESET" && !card_id) {
-      return res.status(400).json(formatResponse.error("MISSING_CARD_ID", "RESET requires card_id from openScorecard."));
+      return res
+        .status(400)
+        .json(
+          formatResponse.error(
+            "MISSING_CARD_ID",
+            "RESET requires card_id from openScorecard.",
+          ),
+        );
     }
 
     const frame = await arc3ApiClient.executeAction(
       game_id,
       guid,
-      { action, coordinates: coordinates ? [coordinates[0], coordinates[1]] : undefined },
+      {
+        action,
+        coordinates: coordinates ? [coordinates[0], coordinates[1]] : undefined,
+      },
       undefined,
       card_id,
     );
@@ -110,10 +163,34 @@ router.post(
   }),
 );
 
+/**
+ * GET /api/arc3-openai/games
+ * Return available ARC-AGI-3 games from puzzle-environments
+ */
+router.get(
+  "/games",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const games = getAvailableGames();
+    const simplified = games.map((g) => ({
+      gameId: g.gameId,
+      title: g.metadata.title ?? g.gameId,
+      tags: g.metadata.tags ?? [],
+      baselineActions: g.metadata.baseline_actions ?? [],
+    }));
+    res.json(formatResponse.success(simplified));
+  }),
+);
+
 router.get(
   "/health",
   asyncHandler(async (_req: Request, res: Response) => {
-    res.json(formatResponse.success({ status: "healthy", provider: "openai", timestamp: Date.now() }));
+    res.json(
+      formatResponse.success({
+        status: "healthy",
+        provider: "openai",
+        timestamp: Date.now(),
+      }),
+    );
   }),
 );
 

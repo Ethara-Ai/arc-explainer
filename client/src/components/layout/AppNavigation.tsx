@@ -1,31 +1,20 @@
-/**
- * Author: Cascade (OpenAI)
- * Date: 2026-02-07
- * PURPOSE: Hierarchical navigation with grouped dropdown menus, emoji dividers, and aligned iconography.
- * Organizes navigation items into regular links and dropdown groups for better scannability.
- * Groups: ARC-3 (landing + active playground), Misc (leaderboards, puzzle DB, test, discussion, LLM reasoning, kaggle readiness).
- * Uses shadcn/ui NavigationMenu with triggers, content, and viewport for dropdown functionality.
- * CRITICAL: NavigationMenuViewport is required for dropdown content to render properly!
- * Emoji dividers are rendered INSIDE each menu item to maintain proper Radix UI hierarchy.
- * SRP/DRY check: Pass - Single responsibility (navigation structure), reuses shadcn components
- */
-import React from 'react';
-import { Link, useLocation } from 'wouter';
+import React from "react";
+import { Link, useLocation } from "wouter";
 import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
   navigationMenuTriggerStyle,
-} from '@/components/ui/navigation-menu';
+} from "@/components/ui/navigation-menu";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Grid3X3,
   Database,
@@ -45,12 +34,12 @@ import {
   Zap,
   Code,
   Worm,
-  CircuitBoard
-} from 'lucide-react';
+  CircuitBoard,
+} from "lucide-react";
 
 // Type definitions for discriminated union
 interface NavLink {
-  type: 'link';
+  type: "link";
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -58,7 +47,7 @@ interface NavLink {
 }
 
 interface NavDropdown {
-  type: 'dropdown';
+  type: "dropdown";
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   description?: string;
@@ -69,256 +58,319 @@ type NavItem = NavLink | NavDropdown;
 
 const navigationItems: NavItem[] = [
   {
-    type: 'link',
-    title: 'Home',
-    href: '/',
+    type: "link",
+    title: "Home",
+    href: "/",
     icon: Grid3X3,
-    description: 'Browse ARC puzzles and start analysis'
+    description: "Browse ARC puzzles and start analysis",
   },
   {
-    type: 'link',
-    title: 'Analytics',
-    href: '/analytics',
-    icon: Database,
-    description: 'Model performance analytics and leaderboards'
-  },
-  {
-    type: 'link',
-    title: 'Official Scoring',
-    href: '/scoring',
-    icon: Zap,
-    description: 'Official test results on public evaluation set with 2 attempts per puzzle'
-  },
-  {
-    type: 'link',
-    title: 'RE-ARC',
-    href: '/re-arc',
-    icon: CircuitBoard,
-    description: 'Generate unique evaluation datasets and validate solver submissions'
-  },
-  {
-    type: 'link',
-    title: 'Compare',
-    href: '/elo',
-    icon: Trophy,
-    description: 'Compare AI explanations head-to-head with ELO ratings'
-  },
-  {
-    type: 'dropdown',
-    title: 'ARC-3',
-    icon: Gamepad2,
-    description: 'ARC-3 Games and Playground',
-    children: [
-      {
-        type: 'link',
-        title: 'ARC-AGI-3',
-        href: '/arc3',
-        icon: Gamepad2,
-        description: 'Interactive reasoning benchmark for AI agents (game-based, not puzzles)'
-      },
-      {
-        type: 'link',
-        title: 'Playground',
-        href: '/arc3/playground',
-        icon: FlaskConical,
-        description: 'Experiment with ARC-3 games'
-      }
-    ]
-  },
-  {
-    type: 'dropdown',
-    title: 'Misc',
-    icon: MoreHorizontal,
-    description: 'Additional resources and tools',
-    children: [
-      {
-        type: 'link',
-        title: 'Debate',
-        href: '/debate',
-        icon: MessageSquare,
-        description: 'Watch AI models challenge each other\'s explanations'
-      },
-      {
-        type: 'link',
-        title: 'Discussion',
-        href: '/discussion',
-        icon: Brain,
-        description: 'Uses the Responses API to do iterative self-conversation'
-      },
-      {
-        type: 'link',
-        title: 'Feedback',
-        href: '/feedback',
-        icon: MessageSquare,
-        description: 'Explore human feedback on model explanations'
-      },
-      {
-        type: 'link',
-        title: 'Leaderboards',
-        href: '/leaderboards',
-        icon: Award,
-        description: 'Model performance rankings across accuracy, trustworthiness, and feedback'
-      },
-      {
-        type: 'link',
-        title: 'Puzzle DB',
-        href: '/puzzles/database',
-        icon: Database,
-        description: 'Individual puzzles with DB record counts and difficulty analysis'
-      },
-      {
-        type: 'link',
-        title: 'Test',
-        href: '/test-solution',
-        icon: CheckCircle,
-        description: 'Test your own predicted solutions against ARC puzzles'
-      },
-      {
-        type: 'link',
-        title: 'LLM Reasoning',
-        href: '/llm-reasoning',
-        icon: Brain,
-        description: 'Plain-language explainer of how AI pattern matching differs from human thinking'
-      },
-      {
-        type: 'link',
-        title: 'LLM Council',
-        href: '/council',
-        icon: Users,
-        description: 'Multi-model consensus evaluation for ARC puzzles with 3-stage deliberation'
-      },
-      {
-        type: 'link',
-        title: 'Kaggle Readiness',
-        href: '/kaggle-readiness',
-        icon: FileCheck,
-        description: 'Validate your ARC Kaggle competition readiness'
-      },
-      {
-        type: 'link',
-        title: 'Poetiq Solver',
-        href: '/poetiq',
-        icon: Code,
-        description: 'Help verify the Poetiq code-generation solver with your API key'
-      },
-      {
-        type: 'link',
-        title: 'DatasetViewer',
-        href: '/dataset-viewer',
-        icon: Database,
-        description: 'Open or drop any dataset to inspect contents and metadata'
-      }
-    ]
-  },
-  {
-    type: 'dropdown',
-    title: 'SnakeBench',
-    icon: Gamepad2,
-    description: 'SnakeBench and Worm Arena tools',
-    children: [
-      {
-        type: 'link',
-        title: 'SnakeBench (Upstream)',
-        href: '/snakebench',
-        icon: Gamepad2,
-        description: 'Official SnakeBench project (upstream)'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Replay)',
-        href: '/worm-arena',
-        icon: Worm,
-        description: 'Replay a saved match by matchId'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Live)',
-        href: '/worm-arena/live',
-        icon: Worm,
-        description: 'Run and watch a live match'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Matches)',
-        href: '/worm-arena/matches',
-        icon: Worm,
-        description: 'Browse matches by model (DB-backed)'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Models)',
-        href: '/worm-arena/models',
-        icon: Worm,
-        description: 'Model match history and combat profiles'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Stats & Placement)',
-        href: '/worm-arena/stats',
-        icon: Worm,
-        description: 'Ratings, placements, and leaderboards'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Skill Analysis)',
-        href: '/worm-arena/skill-analysis',
-        icon: Worm,
-        description: 'Model performance analysis and skill metrics'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Distributions)',
-        href: '/worm-arena/distributions',
-        icon: Worm,
-        description: 'Run length distributions and match statistics'
-      },
-      {
-        type: 'link',
-        title: 'Worm Arena (Rules)',
-        href: '/worm-arena/rules',
-        icon: Worm,
-        description: 'Game rules and LLM prompt transparency'
-      }
-    ]
-  },
-  {
-    type: 'link',
-    title: 'About',
-    href: '/about',
+    type: "link",
+    title: "About",
+    href: "/about",
     icon: Info,
-    description: 'Learn about this project and acknowledgments'
+    description: "Learn about this project and acknowledgments",
   },
   {
-    type: 'link',
-    title: 'Cards',
-    href: '/trading-cards',
+    type: "link",
+    title: "Analytics",
+    href: "/analytics",
+    icon: Database,
+    description: "Model performance analytics and leaderboards",
+  },
+  {
+    type: "link",
+    title: "Official Scoring",
+    href: "/scoring",
+    icon: Zap,
+    description:
+      "Official test results on public evaluation set with 2 attempts per puzzle",
+  },
+  {
+    type: "link",
+    title: "RE-ARC",
+    href: "/re-arc",
+    icon: CircuitBoard,
+    description:
+      "Generate unique evaluation datasets and validate solver submissions",
+  },
+  {
+    type: "link",
+    title: "Eval Harness",
+    href: "/eval",
+    icon: Zap,
+    description: "Run and visualize LLM evaluations on ARC puzzle environments",
+  },
+  {
+    type: "link",
+    title: "Compare",
+    href: "/elo",
+    icon: Trophy,
+    description: "Compare AI explanations head-to-head with ELO ratings",
+  },
+  {
+    type: "dropdown",
+    title: "Eval",
+    icon: FlaskConical,
+    description: "Evaluation Harness and ARC3 Playground",
+    children: [
+      {
+        type: "link",
+        title: "Eval Overview",
+        href: "/eval",
+        icon: FlaskConical,
+        description:
+          "All sessions, trajectories, charts, and model performance",
+      },
+      {
+        type: "link",
+        title: "New Eval Run",
+        href: "/eval/run",
+        icon: FlaskConical,
+        description: "Start multi-model evaluations with live game grids",
+      },
+      {
+        type: "link",
+        title: "ARC3 Playground",
+        href: "/arc3/playground",
+        icon: Gamepad2,
+        description: "Multi-model multi-game agent playground with live grids",
+      },
+      {
+        type: "link",
+        title: "ARC3 Agent SDK",
+        href: "/arc3/agentsdk-playground",
+        icon: Code,
+        description:
+          "Agent SDK multi-provider playground",
+      },
+    ],
+  },
+  {
+    type: "dropdown",
+    title: "ARC-3",
+    icon: Gamepad2,
+    description: "ARC-3 Games and Playground",
+    children: [
+      {
+        type: "link",
+        title: "ARC-AGI-3",
+        href: "/arc3",
+        icon: Gamepad2,
+        description:
+          "Interactive reasoning benchmark for AI agents (game-based, not puzzles)",
+      },
+      {
+        type: "link",
+        title: "Playground",
+        href: "/arc3/playground",
+        icon: FlaskConical,
+        description: "Experiment with ARC-3 games",
+      },
+      {
+        type: "link",
+        title: "Agent SDK Playground",
+        href: "/arc3/agentsdk-playground",
+        icon: Code,
+        description:
+          "Agent SDK multi-provider playground",
+      },
+    ],
+  },
+  {
+    type: "dropdown",
+    title: "Misc",
+    icon: MoreHorizontal,
+    description: "Additional resources and tools",
+    children: [
+      {
+        type: "link",
+        title: "Debate",
+        href: "/debate",
+        icon: MessageSquare,
+        description: "Watch AI models challenge each other's explanations",
+      },
+      {
+        type: "link",
+        title: "Discussion",
+        href: "/discussion",
+        icon: Brain,
+        description: "Uses the Responses API to do iterative self-conversation",
+      },
+      {
+        type: "link",
+        title: "Feedback",
+        href: "/feedback",
+        icon: MessageSquare,
+        description: "Explore human feedback on model explanations",
+      },
+      {
+        type: "link",
+        title: "Leaderboards",
+        href: "/leaderboards",
+        icon: Award,
+        description:
+          "Model performance rankings across accuracy, trustworthiness, and feedback",
+      },
+      {
+        type: "link",
+        title: "Puzzle DB",
+        href: "/puzzles/database",
+        icon: Database,
+        description:
+          "Individual puzzles with DB record counts and difficulty analysis",
+      },
+      {
+        type: "link",
+        title: "Test",
+        href: "/test-solution",
+        icon: CheckCircle,
+        description: "Test your own predicted solutions against ARC puzzles",
+      },
+      {
+        type: "link",
+        title: "LLM Reasoning",
+        href: "/llm-reasoning",
+        icon: Brain,
+        description:
+          "Plain-language explainer of how AI pattern matching differs from human thinking",
+      },
+      {
+        type: "link",
+        title: "LLM Council",
+        href: "/council",
+        icon: Users,
+        description:
+          "Multi-model consensus evaluation for ARC puzzles with 3-stage deliberation",
+      },
+      {
+        type: "link",
+        title: "Kaggle Readiness",
+        href: "/kaggle-readiness",
+        icon: FileCheck,
+        description: "Validate your ARC Kaggle competition readiness",
+      },
+      {
+        type: "link",
+        title: "Poetiq Solver",
+        href: "/poetiq",
+        icon: Code,
+        description:
+          "Help verify the Poetiq code-generation solver with your API key",
+      },
+      {
+        type: "link",
+        title: "DatasetViewer",
+        href: "/dataset-viewer",
+        icon: Database,
+        description:
+          "Open or drop any dataset to inspect contents and metadata",
+      },
+    ],
+  },
+  {
+    type: "dropdown",
+    title: "SnakeBench",
+    icon: Gamepad2,
+    description: "SnakeBench and Worm Arena tools",
+    children: [
+      {
+        type: "link",
+        title: "SnakeBench (Upstream)",
+        href: "/snakebench",
+        icon: Gamepad2,
+        description: "Official SnakeBench project (upstream)",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Replay)",
+        href: "/worm-arena",
+        icon: Worm,
+        description: "Replay a saved match by matchId",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Live)",
+        href: "/worm-arena/live",
+        icon: Worm,
+        description: "Run and watch a live match",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Matches)",
+        href: "/worm-arena/matches",
+        icon: Worm,
+        description: "Browse matches by model (DB-backed)",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Models)",
+        href: "/worm-arena/models",
+        icon: Worm,
+        description: "Model match history and combat profiles",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Stats & Placement)",
+        href: "/worm-arena/stats",
+        icon: Worm,
+        description: "Ratings, placements, and leaderboards",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Skill Analysis)",
+        href: "/worm-arena/skill-analysis",
+        icon: Worm,
+        description: "Model performance analysis and skill metrics",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Distributions)",
+        href: "/worm-arena/distributions",
+        icon: Worm,
+        description: "Run length distributions and match statistics",
+      },
+      {
+        type: "link",
+        title: "Worm Arena (Rules)",
+        href: "/worm-arena/rules",
+        icon: Worm,
+        description: "Game rules and LLM prompt transparency",
+      },
+    ],
+  },
+  {
+    type: "link",
+    title: "Cards",
+    href: "/trading-cards",
     icon: Wallet,
-    description: 'Named puzzles as collectible trading cards with performance stats'
+    description:
+      "Named puzzles as collectible trading cards with performance stats",
   },
   {
-    type: 'link',
-    title: 'People',
-    href: '/hall-of-fame',
+    type: "link",
+    title: "People",
+    href: "/hall-of-fame",
     icon: Users,
-    description: 'Notable ARC contributors and researchers as trading cards'
-  }
+    description: "Notable ARC contributors and researchers as trading cards",
+  },
 ];
 
 // ARC color palette for dividers
-const dividerEmojis = ['🟥', '🟧', '🟨', '🟩', '🟦', '🟪'];
+const dividerEmojis = ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪"];
 
 export function AppNavigation() {
   const [location] = useLocation();
 
   const isActiveRoute = (href: string) => {
-    if (href === '/') {
-      return location === '/' || location === '/browser';
+    if (href === "/") {
+      return location === "/" || location === "/browser";
     }
     return location.startsWith(href);
   };
 
   const isDropdownActive = (dropdown: NavDropdown): boolean => {
-    return dropdown.children.some(child => isActiveRoute(child.href));
+    return dropdown.children.some((child) => isActiveRoute(child.href));
   };
 
   return (
@@ -328,18 +380,19 @@ export function AppNavigation() {
           {navigationItems.map((item, index) => {
             const showDivider = index < navigationItems.length - 1;
             const dividerEmoji = dividerEmojis[index % dividerEmojis.length];
-            const key = item.type === 'link' ? item.href : item.title;
+            const key = item.type === "link" ? item.href : item.title;
 
             return (
               <NavigationMenuItem key={key} className="flex items-center">
-                {item.type === 'link' ? (
+                {item.type === "link" ? (
                   <NavigationMenuLink asChild>
                     <Link
                       href={item.href}
                       className={cn(
                         navigationMenuTriggerStyle(),
                         "flex items-center gap-2 font-medium",
-                        isActiveRoute(item.href) && "bg-accent text-accent-foreground"
+                        isActiveRoute(item.href) &&
+                          "bg-accent text-accent-foreground",
                       )}
                     >
                       <item.icon className="h-4 w-4" />
@@ -352,7 +405,8 @@ export function AppNavigation() {
                       className={cn(
                         navigationMenuTriggerStyle(),
                         "flex items-center gap-2 font-medium",
-                        isDropdownActive(item) && "bg-accent text-accent-foreground"
+                        isDropdownActive(item) &&
+                          "bg-accent text-accent-foreground",
                       )}
                     >
                       <item.icon className="h-4 w-4" />
@@ -372,13 +426,16 @@ export function AppNavigation() {
                                 "block select-none rounded-md px-3 py-2 text-sm leading-none no-underline outline-none transition-colors",
                                 "hover:bg-accent hover:text-accent-foreground",
                                 "focus:bg-accent focus:text-accent-foreground",
-                                isChildActive && "bg-accent text-accent-foreground font-semibold"
+                                isChildActive &&
+                                  "bg-accent text-accent-foreground font-semibold",
                               )}
                             >
                               <div className="flex items-center gap-2">
                                 <child.icon className="h-4 w-4" />
                                 <div>
-                                  <div className="font-medium">{child.title}</div>
+                                  <div className="font-medium">
+                                    {child.title}
+                                  </div>
                                   {child.description && (
                                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                                       {child.description}
@@ -404,7 +461,7 @@ export function AppNavigation() {
         </NavigationMenuList>
       </NavigationMenu>
 
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         <a
           href="https://github.com/82deutschmark/arc-explainer"
           target="_blank"
@@ -416,7 +473,7 @@ export function AppNavigation() {
             <span className="text-xs">Open Source</span>
           </Button>
         </a>
-      </div>
+      </div> */}
     </div>
   );
 }
