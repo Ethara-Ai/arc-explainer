@@ -1,5 +1,3 @@
-
-
 import { spawn, type ChildProcess } from "child_process";
 import { getPythonBin } from "../../../config/env";
 import { createInterface, type Interface as ReadlineInterface } from "readline";
@@ -282,6 +280,9 @@ export class GameBridge {
   private pendingResolve: ((value: BridgeResponse) => void) | null = null;
   private pendingReject: ((reason: Error) => void) | null = null;
 
+  /** Mutex: non-null while a killAndRespawn or ensureAlive cycle is in-flight. */
+  private respawning: Promise<void> | null = null;
+
   constructor(
     gameId: string,
     pyFilePath: string,
@@ -418,7 +419,8 @@ export class GameBridge {
 
   /** Reset the game to its initial state; returns the opening frame. */
   async reset(seed?: number): Promise<BridgeFrameResponse> {
-    const cmd: BridgeCommand = seed != null ? { type: "reset", seed } : { type: "reset" };
+    const cmd: BridgeCommand =
+      seed != null ? { type: "reset", seed } : { type: "reset" };
     const resp = await this.sendCommand(cmd);
     return resp as BridgeFrameResponse;
   }
@@ -685,10 +687,23 @@ export class GameBridge {
    * Force-kill the subprocess and spawn a fresh one.
    * Kill chain: stdin.end → SIGTERM → 5s grace → SIGKILL → teardown → start().
    * First line sets alive=false synchronously to prevent races.
+   *
+   * Re-entrant safe: concurrent callers share the same in-flight promise.
    */
-  private async killAndRespawn(): Promise<void> {
+  private killAndRespawn(): Promise<void> {
+    // Immediately mark dead to prevent new commands from racing in
     this.alive = false;
 
+    if (this.respawning) return this.respawning;
+
+    this.respawning = this.doKillAndRespawn().finally(() => {
+      this.respawning = null;
+    });
+    return this.respawning;
+  }
+
+  /** Internal kill + respawn logic — callers must go through killAndRespawn(). */
+  private async doKillAndRespawn(): Promise<void> {
     const proc = this.proc;
     if (proc) {
       try {
@@ -706,15 +721,8 @@ export class GameBridge {
       // Wait up to 5s for process to exit; SIGKILL if it doesn't
       await new Promise<void>((resolve) => {
         let resolved = false;
-        const done = () => {
-          if (resolved) return;
-          resolved = true;
-          resolve();
-        };
 
-        proc.on("exit", done);
-
-        setTimeout(() => {
+        const killTimer = setTimeout(() => {
           try {
             proc.kill("SIGKILL");
           } catch {
@@ -722,6 +730,16 @@ export class GameBridge {
           }
           done();
         }, 5000);
+
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
+          clearTimeout(killTimer);
+          proc.removeListener("exit", done);
+          resolve();
+        };
+
+        proc.on("exit", done);
       });
     }
 
@@ -731,11 +749,22 @@ export class GameBridge {
 
   /**
    * If the bridge is dead, respawn it by calling start().
-   * No-ops if already alive.
+   * No-ops if already alive. Re-entrant safe via shared respawning promise.
    */
-  private async ensureAlive(): Promise<void> {
-    if (this.alive) return;
-    await this.start();
+  private ensureAlive(): Promise<void> {
+    if (this.alive) return Promise.resolve();
+    if (this.respawning) return this.respawning;
+
+    this.respawning = this.start().then(
+      () => {
+        this.respawning = null;
+      },
+      (err) => {
+        this.respawning = null;
+        throw err;
+      },
+    );
+    return this.respawning;
   }
 
   /** Release all resources without sending quit (used after unexpected exit). */
