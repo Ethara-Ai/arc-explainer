@@ -6,44 +6,46 @@
  * Updated to include OpenRouter sync status banner above header.
  * SRP/DRY check: Pass - Single responsibility (header layout), reuses AppNavigation component
  */
-import React from 'react';
-import { Link } from 'wouter';
-import { AppNavigation } from './AppNavigation';
-import { OpenRouterSyncBanner } from './OpenRouterSyncBanner';
+import React from "react";
+import { Link } from "wouter";
+import { AppNavigation } from "./AppNavigation";
+import { OpenRouterSyncBanner } from "./OpenRouterSyncBanner";
 
 export function AppHeader() {
   return (
     <>
       <OpenRouterSyncBanner />
       <header className="z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-12 items-center justify-between gap-4 px-4">
-        <Link href="/">
-          <div className="flex items-center gap-3 cursor-pointer group min-w-fit">
-            {/* ARC-inspired colorful logo */}
-            <div className="flex flex-col gap-0.5 group-hover:scale-110 transition-transform">
-              <div className="flex gap-0.5 text-[10px] leading-none">
-                <span>🟥</span>
-                <span>🟧</span>
-                <span>🟨</span>
+        <div className="flex h-12 items-center justify-between gap-4 px-4">
+          <Link href="/">
+            <div className="flex items-center gap-3 cursor-pointer group min-w-fit">
+              {/* ARC-inspired colorful logo */}
+              <div className="flex flex-col gap-0.5 group-hover:scale-110 transition-transform">
+                <div className="flex gap-0.5 text-[10px] leading-none">
+                  <span>🟥</span>
+                  <span>🟧</span>
+                  <span>🟨</span>
+                </div>
+                <div className="flex gap-0.5 text-[10px] leading-none">
+                  <span>🟩</span>
+                  <span>🟦</span>
+                  <span>🟪</span>
+                </div>
               </div>
-              <div className="flex gap-0.5 text-[10px] leading-none">
-                <span>🟩</span>
-                <span>🟦</span>
-                <span>🟪</span>
+              <div className="flex flex-col">
+                <div className="font-bold text-base leading-tight whitespace-nowrap">
+                  ARC 3 x Ethara AI
+                </div>
+                {/* <div className="text-[9px] text-muted-foreground leading-none whitespace-nowrap"></div> */}
               </div>
             </div>
-            <div className="flex flex-col">
-              <div className="font-bold text-base leading-tight whitespace-nowrap">ARC 3 x Ethara AI</div>
-              {/* <div className="text-[9px] text-muted-foreground leading-none whitespace-nowrap"></div> */}
-            </div>
-          </div>
-        </Link>
+          </Link>
 
-        <div className="flex flex-1 items-center justify-end overflow-x-auto">
-          <AppNavigation />
+          <div className="flex flex-1 items-center justify-end overflow-x-auto scrollbar-none">
+            <AppNavigation />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
     </>
   );
 }

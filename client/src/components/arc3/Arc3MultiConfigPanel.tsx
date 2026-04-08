@@ -166,7 +166,7 @@ export const Arc3MultiConfigPanel: React.FC<Arc3ConfigurationPanelProps> = ({
           </button>
 
           {gamesExpanded && (
-            <div className="max-h-40 overflow-y-auto space-y-0.5 border border-[#1e1e2e] rounded-xl bg-[#0e0e16] p-2">
+            <div className="max-h-40 overflow-y-auto dark-scrollbar space-y-0.5 border border-[#1e1e2e] rounded-xl bg-[#0e0e16] p-2">
               {gamesLoading ? (
                 <div className="text-[10px] text-gray-500 py-2 text-center">
                   Loading games...
@@ -226,7 +226,7 @@ export const Arc3MultiConfigPanel: React.FC<Arc3ConfigurationPanelProps> = ({
           </button>
 
           {modelsExpanded && (
-            <div className="max-h-36 overflow-y-auto space-y-0.5 border border-[#1e1e2e] rounded-xl bg-[#0e0e16] p-2">
+            <div className="max-h-36 overflow-y-auto dark-scrollbar space-y-0.5 border border-[#1e1e2e] rounded-xl bg-[#0e0e16] p-2">
               {models.map((m) => (
                 <label
                   key={m.key}
