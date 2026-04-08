@@ -274,8 +274,73 @@ export class LiteLLMSdkProvider extends BaseProvider {
       }
     }
 
+    // ── Responses API conversion for OpenAI reasoning models ────────────────
+    // GPT 5.4 with reasoningEffort needs the Responses API to report
+    // reasoning_tokens. Mutate the already-built request in-place so that
+    // prompt building, tool definitions, and action descriptions stay identical.
+    const useResponsesApi =
+      this._providerHint === "openai" && this._reasoningEffort != null;
+
+    if (useResponsesApi) {
+      request.type = "responses";
+
+      // messages → input (non-system) + instructions (system prompt)
+      const systemMsg = messages.find(
+        (m: Record<string, any>) => m.role === "system",
+      );
+      request.instructions = systemMsg?.content ?? "";
+      request.input = messages
+        .filter((m: Record<string, any>) => m.role !== "system")
+        .map((m: Record<string, any>) => {
+          if (!Array.isArray(m.content)) return m;
+          return {
+            ...m,
+            content: m.content.map((part: Record<string, any>) => {
+              if (part.type === "text") {
+                return { type: "input_text", text: part.text };
+              }
+              if (part.type === "image_url") {
+                return {
+                  type: "input_image",
+                  image_url: part.image_url?.url ?? part.image_url,
+                };
+              }
+              return part;
+            }),
+          };
+        });
+      delete request.messages;
+
+      // Tool format: Chat Completions wraps in {type,function:{name,parameters}}
+      // Responses API uses flat {type,name,parameters}
+      const chatTool = request.tools?.[0];
+      if (chatTool?.function) {
+        request.tools = [
+          {
+            type: "function",
+            name: chatTool.function.name,
+            description: chatTool.function.description,
+            parameters: chatTool.function.parameters,
+          },
+        ];
+      }
+
+      // tool_choice: Responses API uses {type,name} instead of string "required"
+      request.tool_choice = { type: "function", name: "play_action" };
+
+      // max_tokens → max_output_tokens
+      request.max_output_tokens = request.max_tokens;
+      delete request.max_tokens;
+
+      // reasoning config
+      request.reasoning = { effort: this._reasoningEffort };
+      delete request.reasoning_effort;
+
+      request.store = false;
+    }
+
     console.log(
-      `[LiteLLMSdkProvider] Sending to bridge: model=${request.model} cloudRegion=${request.aws_region_name ?? "(none)"} apiKeyLen=${request.api_key?.length ?? 0}`,
+      `[LiteLLMSdkProvider] Sending to bridge: model=${request.model} type=${request.type} cloudRegion=${request.aws_region_name ?? "(none)"} apiKeyLen=${request.api_key?.length ?? 0}`,
     );
 
     // Send request and wait for multiplexed response
@@ -288,6 +353,8 @@ export class LiteLLMSdkProvider extends BaseProvider {
     const responseData = result.data as Record<string, any>;
 
     // Extract usage from the bridge response
+    // Both _extract_response_data and _extract_responses_data normalize to the
+    // same field names (prompt_tokens, completion_tokens, reasoning_tokens)
     const usage = responseData.usage ?? {};
     let inputTokens = (usage.prompt_tokens ?? 0) as number;
     const outputTokens = (usage.completion_tokens ?? 0) as number;
@@ -334,36 +401,77 @@ export class LiteLLMSdkProvider extends BaseProvider {
     let reasoning = "";
     let notepadUpdate: string | null = null;
 
-    const choices = responseData.response?.choices;
-    if (choices?.length) {
-      const choice = choices[0];
-      const toolCalls = choice?.message?.tool_calls;
-
-      if (toolCalls?.length) {
-        const tc = toolCalls[0];
-        const fnArgs = tc?.function?.arguments;
-        if (fnArgs) {
-          try {
-            const args =
-              typeof fnArgs === "string" ? JSON.parse(fnArgs) : fnArgs;
-            action = String(args.action ?? "SKIP").trim();
-            reasoning = String(args.reasoning ?? "").trim();
-            notepadUpdate = args.notepad_update ?? null;
-            if (notepadUpdate !== null)
-              notepadUpdate = String(notepadUpdate).trim();
-          } catch {
-            [action, reasoning, notepadUpdate] = this.parseActionResponse(
-              typeof fnArgs === "string" ? fnArgs : JSON.stringify(fnArgs),
-              validActions,
-            );
+    if (useResponsesApi) {
+      // Responses API: output[] contains items with type "function_call"
+      const output = responseData.response?.output;
+      if (Array.isArray(output)) {
+        for (const item of output) {
+          if (
+            item.type === "function_call" &&
+            item.name === "play_action"
+          ) {
+            try {
+              const args =
+                typeof item.arguments === "string"
+                  ? JSON.parse(item.arguments)
+                  : item.arguments;
+              action = String(args.action ?? "SKIP").trim();
+              reasoning = String(args.reasoning ?? "").trim();
+              notepadUpdate = args.notepad_update ?? null;
+              if (notepadUpdate !== null)
+                notepadUpdate = String(notepadUpdate).trim();
+            } catch {
+              const text = item.arguments ?? "";
+              [action, reasoning, notepadUpdate] = this.parseActionResponse(
+                typeof text === "string" ? text : JSON.stringify(text),
+                validActions,
+              );
+            }
+            break;
           }
         }
-      } else if (choice?.message?.content) {
-        const content = choice.message.content;
+      }
+
+      // Fallback: try output_text if no function_call found
+      if (action === "SKIP" && responseData.response?.output_text) {
         [action, reasoning, notepadUpdate] = this.parseActionResponse(
-          typeof content === "string" ? content : JSON.stringify(content),
+          responseData.response.output_text,
           validActions,
         );
+      }
+    } else {
+      // Chat Completions: choices[].message.tool_calls
+      const choices = responseData.response?.choices;
+      if (choices?.length) {
+        const choice = choices[0];
+        const toolCalls = choice?.message?.tool_calls;
+
+        if (toolCalls?.length) {
+          const tc = toolCalls[0];
+          const fnArgs = tc?.function?.arguments;
+          if (fnArgs) {
+            try {
+              const args =
+                typeof fnArgs === "string" ? JSON.parse(fnArgs) : fnArgs;
+              action = String(args.action ?? "SKIP").trim();
+              reasoning = String(args.reasoning ?? "").trim();
+              notepadUpdate = args.notepad_update ?? null;
+              if (notepadUpdate !== null)
+                notepadUpdate = String(notepadUpdate).trim();
+            } catch {
+              [action, reasoning, notepadUpdate] = this.parseActionResponse(
+                typeof fnArgs === "string" ? fnArgs : JSON.stringify(fnArgs),
+                validActions,
+              );
+            }
+          }
+        } else if (choice?.message?.content) {
+          const content = choice.message.content;
+          [action, reasoning, notepadUpdate] = this.parseActionResponse(
+            typeof content === "string" ? content : JSON.stringify(content),
+            validActions,
+          );
+        }
       }
     }
 

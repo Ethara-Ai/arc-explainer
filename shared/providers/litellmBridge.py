@@ -298,6 +298,187 @@ async def _handle_completion(req: dict[str, Any]) -> None:
         })
 
 
+def _extract_responses_data(response: Any) -> dict[str, Any]:
+    """Extract fields from a litellm Responses API response.
+
+    Maps Responses API field names to the same bridge protocol field names
+    that _extract_response_data() produces, so the TS side can parse either
+    response format identically.
+    """
+    import litellm as _litellm_mod
+
+    data: dict[str, Any] = {}
+
+    # Core response — Responses API returns a ResponsesAPIResponse object
+    if hasattr(response, "model_dump"):
+        data["response"] = response.model_dump()
+    elif hasattr(response, "dict"):
+        data["response"] = response.dict()
+    else:
+        data["response"] = str(response)
+
+    # _hidden_params
+    hidden = getattr(response, "_hidden_params", {}) or {}
+    if hidden:
+        if hasattr(hidden, "model_dump"):
+            data["_hidden_params"] = hidden.model_dump()
+        elif hasattr(hidden, "__dict__"):
+            data["_hidden_params"] = {
+                k: v for k, v in hidden.__dict__.items()
+                if not k.startswith("__")
+            }
+        elif isinstance(hidden, dict):
+            data["_hidden_params"] = dict(hidden)
+        else:
+            data["_hidden_params"] = str(hidden)
+    else:
+        data["_hidden_params"] = {}
+
+    # _response_headers
+    resp_headers = getattr(response, "_response_headers", None)
+    if resp_headers:
+        if isinstance(resp_headers, dict):
+            data["_response_headers"] = dict(resp_headers)
+        else:
+            data["_response_headers"] = {k: v for k, v in resp_headers.items()} if hasattr(resp_headers, "items") else str(resp_headers)
+
+    # Usage: Responses API uses input_tokens / output_tokens (not prompt_tokens / completion_tokens)
+    usage = getattr(response, "usage", None)
+    if usage:
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        data["usage"] = {
+            "prompt_tokens": input_tokens,
+            "completion_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+        }
+
+        # Reasoning tokens from output_tokens_details.reasoning_tokens
+        otd = getattr(usage, "output_tokens_details", None)
+        if otd:
+            data["usage"]["reasoning_tokens"] = getattr(otd, "reasoning_tokens", 0) or 0
+        else:
+            data["usage"]["reasoning_tokens"] = 0
+
+        # Input token caching from input_tokens_details.cached_tokens
+        itd = getattr(usage, "input_tokens_details", None)
+        if itd:
+            data["usage"]["cached_tokens"] = getattr(itd, "cached_tokens", 0) or 0
+        else:
+            data["usage"]["cached_tokens"] = 0
+
+        data["usage"]["cache_read_input_tokens"] = 0
+        data["usage"]["cache_creation_input_tokens"] = 0
+
+    # Cost from _hidden_params
+    data["cost_usd"] = hidden.get("response_cost", None) if isinstance(hidden, dict) else getattr(hidden, "response_cost", None)
+    data["response_ms"] = getattr(response, "response_ms", None) or getattr(response, "_response_ms", None)
+
+    # LiteLLM version
+    try:
+        from litellm._version import version as _litellm_ver
+        data["litellm_version"] = _litellm_ver
+    except ImportError:
+        data["litellm_version"] = getattr(_litellm_mod, "__version__", "unknown")
+
+    return data
+
+
+async def _handle_responses(req: dict[str, Any]) -> None:
+    """Handle a 'responses' request: call litellm.aresponses() and return result."""
+    import litellm
+
+    litellm.drop_params = True
+    os.environ.setdefault("LITELLM_LOG", "DEBUG")
+
+    request_id = req.get("id", str(uuid.uuid4()))
+
+    try:
+        kwargs: dict[str, Any] = {
+            "model": req["model"],
+            "input": req["input"],
+        }
+
+        msg_count = len(req.get("input", []))
+        payload_chars = len(json.dumps(req["input"], default=str))
+        _log(f"Responses request {request_id}: {msg_count} input items, ~{payload_chars} chars payload")
+
+        # Optional parameters
+        for key in (
+            "tools", "tool_choice", "max_output_tokens", "temperature",
+            "top_p", "stop", "store", "reasoning",
+            "extra_headers",
+        ):
+            if key in req and req[key] is not None:
+                kwargs[key] = req[key]
+
+        # Instructions (system prompt) — separate field in Responses API
+        if req.get("instructions"):
+            kwargs["instructions"] = req["instructions"]
+
+        # API key override
+        if req.get("api_key"):
+            kwargs["api_key"] = req["api_key"]
+
+        # Base URL override
+        if req.get("base_url"):
+            kwargs["api_base"] = req["base_url"]
+
+        # AWS region for Bedrock
+        if req.get("aws_region_name"):
+            kwargs["aws_region_name"] = req["aws_region_name"]
+
+        # Vertex AI credentials
+        if req.get("vertex_project"):
+            kwargs["vertex_project"] = req["vertex_project"]
+        if req.get("vertex_location"):
+            kwargs["vertex_location"] = req["vertex_location"]
+        if req.get("vertex_credentials"):
+            kwargs["vertex_credentials"] = req["vertex_credentials"]
+
+        # Timeout (ms -> seconds)
+        timeout_ms = req.get("timeout_ms", 600_000)
+        aresponses_timeout = timeout_ms / 1000.0
+
+        kwargs_keys = sorted(kwargs.keys())
+        _log(f"Calling litellm.aresponses: model={kwargs['model']}, keys={kwargs_keys}")
+
+        import time as _time
+        t0 = _time.monotonic()
+
+        try:
+            response = await asyncio.wait_for(
+                litellm.aresponses(**kwargs),
+                timeout=aresponses_timeout,
+            )
+        except asyncio.TimeoutError:
+            elapsed = _time.monotonic() - t0
+            raise TimeoutError(
+                f"litellm.aresponses timed out after {elapsed:.1f}s "
+                f"(limit={aresponses_timeout}s, model={kwargs['model']})"
+            )
+
+        elapsed = _time.monotonic() - t0
+
+        result = _extract_responses_data(response)
+        usage = result.get("usage", {})
+        _log(f"Responses response {request_id}: {elapsed:.1f}s, in={usage.get('prompt_tokens', '?')}, out={usage.get('completion_tokens', '?')}, reasoning={usage.get('reasoning_tokens', '?')}")
+
+        _send({
+            "id": request_id,
+            "type": "result",
+            "data": result,
+        })
+
+    except Exception as exc:
+        _log(f"Responses error for {request_id}: {type(exc).__name__}: {exc}")
+        _send({
+            "id": request_id,
+            "type": "error",
+            "error": _serialize_error(exc),
+        })
+
+
 async def _handle_model_info(req: dict[str, Any]) -> None:
     """Handle a 'model_info' request: return model capabilities and pricing."""
     import litellm
@@ -385,6 +566,7 @@ async def _handle_ping(req: dict[str, Any]) -> None:
 
 HANDLERS = {
     "completion": _handle_completion,
+    "responses": _handle_responses,
     "model_info": _handle_model_info,
     "cost": _handle_cost,
     "ping": _handle_ping,
