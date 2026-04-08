@@ -503,9 +503,15 @@ export default function PuzzleEvalDashboard() {
                   max={200}
                   value={formMaxSteps}
                   onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (!isNaN(n))
-                      setFormMaxSteps(Math.min(200, Math.max(1, n)));
+                    const raw = e.target.value;
+                    if (raw === "") return;
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n) && n >= 1) setFormMaxSteps(Math.min(200, n));
+                  }}
+                  onBlur={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (isNaN(n) || n < 1) setFormMaxSteps(1);
+                    else if (n > 200) setFormMaxSteps(200);
                   }}
                 />
               </div>
