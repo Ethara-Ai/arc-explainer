@@ -276,15 +276,18 @@ export const Arc3MultiConfigPanel: React.FC<Arc3ConfigurationPanelProps> = ({
             </label>
             <input
               type="number"
-              min={10}
-              max={1000}
-              step={10}
+              min={1}
               value={maxSteps}
-              onChange={(e) =>
-                setMaxSteps(
-                  Math.min(1000, Math.max(10, Number(e.target.value))),
-                )
-              }
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === '') return;
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n > 0) setMaxSteps(n);
+              }}
+              onBlur={(e) => {
+                const n = parseInt(e.target.value, 10);
+                if (isNaN(n) || n < 1) setMaxSteps(1);
+              }}
               disabled={isRunning}
               className={inputClass}
             />
