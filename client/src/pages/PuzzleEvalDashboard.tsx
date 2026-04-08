@@ -499,10 +499,14 @@ export default function PuzzleEvalDashboard() {
                 <Input
                   id="maxSteps"
                   type="number"
-                  min={10}
-                  max={1000}
+                  min={1}
+                  max={200}
                   value={formMaxSteps}
-                  onChange={(e) => setFormMaxSteps(Number(e.target.value))}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (!isNaN(n))
+                      setFormMaxSteps(Math.min(200, Math.max(1, n)));
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
