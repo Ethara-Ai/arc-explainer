@@ -336,3 +336,85 @@ describe("full trace round-trip", () => {
     }
   });
 });
+
+// ── timing.jsonl schema ─────────────────────────────────────────────────────
+
+describe("timing.jsonl schema", () => {
+  it("timing.jsonl append writes expected schema", async () => {
+    const filePath = path.join(tmpDir, "timing.jsonl");
+    const writer = new JsonlWriter(filePath);
+
+    await writer.append({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 0,
+      api_call_ms: 1523,
+      game_step_ms: 87,
+      timestamp: "2026-04-08T12:00:00.000Z",
+    });
+
+    const records = await writer.read();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toEqual({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 0,
+      api_call_ms: 1523,
+      game_step_ms: 87,
+      timestamp: "2026-04-08T12:00:00.000Z",
+    });
+  });
+
+  it("SKIP action has null game_step_ms", async () => {
+    const filePath = path.join(tmpDir, "timing-skip.jsonl");
+    const writer = new JsonlWriter(filePath);
+
+    await writer.append({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 3,
+      api_call_ms: 2100,
+      game_step_ms: null,
+      timestamp: "2026-04-08T12:01:00.000Z",
+    });
+
+    const records = await writer.read();
+    expect(records).toHaveLength(1);
+    expect(records[0].game_step_ms).toBeNull();
+    expect(records[0].api_call_ms).toBe(2100);
+  });
+
+  it("multiple timing entries accumulate correctly", async () => {
+    const filePath = path.join(tmpDir, "timing-multi.jsonl");
+    const writer = new JsonlWriter(filePath);
+
+    await writer.append({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 0,
+      api_call_ms: 1000,
+      game_step_ms: 50,
+      timestamp: "2026-04-08T12:00:00.000Z",
+    });
+    await writer.append({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 1,
+      api_call_ms: 1200,
+      game_step_ms: 60,
+      timestamp: "2026-04-08T12:00:02.000Z",
+    });
+    await writer.append({
+      run_id: "model_game_run1",
+      run_number: 1,
+      step: 2,
+      api_call_ms: 900,
+      game_step_ms: 45,
+      timestamp: "2026-04-08T12:00:04.000Z",
+    });
+
+    const records = await writer.read();
+    expect(records).toHaveLength(3);
+    expect(records.map((r) => r.step)).toEqual([0, 1, 2]);
+  });
+});
