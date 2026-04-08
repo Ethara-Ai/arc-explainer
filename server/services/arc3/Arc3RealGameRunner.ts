@@ -12,7 +12,6 @@ import type {
   Arc3RunSummary,
   Arc3GameState,
 } from "./types.ts";
-import { buildArc3DefaultPrompt } from "./prompts.ts";
 import {
   DEFAULT_MODEL,
   DEFAULT_MAX_TURNS,

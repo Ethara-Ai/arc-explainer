@@ -12,7 +12,7 @@ import type {
   Arc3RunSummary,
 } from "../types.ts";
 import type { FrameData } from "../Arc3ApiClient.ts";
-import { buildArc3DefaultPrompt } from "../prompts.ts";
+import { buildSystemPrompt } from "../../eval/runner/promptBuilder.ts";
 
 /**
  * Select system prompt based on config options.
@@ -32,7 +32,7 @@ export function selectSystemPrompt(config: Arc3AgentRunConfig): string {
     return explicit;
   }
 
-  return buildArc3DefaultPrompt();
+  return buildSystemPrompt("arc3");
 }
 
 /**
