@@ -275,6 +275,8 @@ export class GameBridge {
   private proc: ChildProcess | null = null;
   private rl: ReadlineInterface | null = null;
   private alive = false;
+  private hasBeenStarted = false;
+  private processExited = false;
   private stderrLines: string[] = [];
 
   private pendingResolve: ((value: BridgeResponse) => void) | null = null;
@@ -340,6 +342,7 @@ export class GameBridge {
       return this.getInfo();
     }
 
+    this.hasBeenStarted = true;
     this.stderrLines = [];
     this.spawnProcess();
     this.setupReadline();
@@ -352,9 +355,14 @@ export class GameBridge {
   /**
    * Send any BridgeCommand and receive the next response from the subprocess.
    * Throws if no process is running or a command is already in-flight.
+   * Auto-respawns dead bridges via ensureAlive() before sending.
    */
   async sendCommand(command: BridgeCommand): Promise<BridgeResponse> {
-    if (!this.alive || !this.proc?.stdin) {
+    if (this.processExited && this.hasBeenStarted) {
+      await this.ensureAlive();
+    }
+
+    if (!this.proc?.stdin) {
       throw new Error(`[GameBridge:${this.gameId}] Process is not running`);
     }
 
@@ -373,6 +381,8 @@ export class GameBridge {
             `[GameBridge:${this.gameId}] Timed out waiting for response to: ${JSON.stringify(command)}`,
           ),
         );
+        // Fire-and-forget kill + respawn to prevent desync with zombie process
+        void this.killAndRespawn().catch(() => {});
       }, this.config.commandTimeoutMs);
 
       this.pendingResolve = (value: BridgeResponse) => {
@@ -514,6 +524,7 @@ export class GameBridge {
     // Propagate unexpected process exits to any waiting promise
     this.proc.on("exit", (code) => {
       this.alive = false;
+      this.processExited = true;
       if (this.pendingReject) {
         const reject = this.pendingReject;
         this.pendingResolve = null;
@@ -541,6 +552,7 @@ export class GameBridge {
     });
 
     this.alive = true;
+    this.processExited = false;
   }
 
   /**
@@ -667,6 +679,63 @@ export class GameBridge {
       x: Number.isNaN(x ?? NaN) ? null : x,
       y: Number.isNaN(y ?? NaN) ? null : y,
     };
+  }
+
+  /**
+   * Force-kill the subprocess and spawn a fresh one.
+   * Kill chain: stdin.end → SIGTERM → 5s grace → SIGKILL → teardown → start().
+   * First line sets alive=false synchronously to prevent races.
+   */
+  private async killAndRespawn(): Promise<void> {
+    this.alive = false;
+
+    const proc = this.proc;
+    if (proc) {
+      try {
+        proc.stdin?.end();
+      } catch {
+        // Process may already be gone
+      }
+
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        // Process may already be gone
+      }
+
+      // Wait up to 5s for process to exit; SIGKILL if it doesn't
+      await new Promise<void>((resolve) => {
+        let resolved = false;
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
+          resolve();
+        };
+
+        proc.on("exit", done);
+
+        setTimeout(() => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            // Process may already be gone
+          }
+          done();
+        }, 5000);
+      });
+    }
+
+    this.teardown();
+    await this.start();
+  }
+
+  /**
+   * If the bridge is dead, respawn it by calling start().
+   * No-ops if already alive.
+   */
+  private async ensureAlive(): Promise<void> {
+    if (this.alive) return;
+    await this.start();
   }
 
   /** Release all resources without sending quit (used after unexpected exit). */

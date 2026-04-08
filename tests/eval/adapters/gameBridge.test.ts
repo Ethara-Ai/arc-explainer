@@ -696,6 +696,14 @@ describe("GameBridge.fromGameId()", () => {
 // ── killAndRespawn / ensureAlive (TDD RED — methods not yet implemented) ─────
 
 describe("killAndRespawn", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /**
    * Helper: create a started GameBridge with controllable mock process.
    * Returns bridge + all mock helpers for assertions.
@@ -726,7 +734,7 @@ describe("killAndRespawn", () => {
 
   // ── Test Case 1 ──────────────────────────────────────────────────────────
   // killAndRespawn kills subprocess and marks bridge as not alive
-  it.todo(
+  it(
     "killAndRespawn kills subprocess and marks bridge as not alive",
     async () => {
       const { bridge, proc } = await startBridge();
@@ -775,7 +783,7 @@ describe("killAndRespawn", () => {
 
   // ── Test Case 2 ──────────────────────────────────────────────────────────
   // DESYNC REGRESSION: sendCommand after timeout gets fresh response, not stale
-  it.todo(
+  it(
     "sendCommand after timeout gets fresh response, not stale one (DESYNC REGRESSION)",
     async () => {
       const { bridge, sendResponse } = await startBridge({
@@ -834,7 +842,7 @@ describe("killAndRespawn", () => {
 
   // ── Test Case 3 ──────────────────────────────────────────────────────────
   // ensureAlive auto-respawns a dead bridge
-  it.todo(
+  it(
     "ensureAlive auto-respawns dead bridge",
     async () => {
       const { bridge, emitExit } = await startBridge();
@@ -887,7 +895,7 @@ describe("killAndRespawn", () => {
 
   // ── Test Case 4 ──────────────────────────────────────────────────────────
   // timeout handler sets alive=false synchronously before async kill
-  it.todo(
+  it(
     "timeout handler sets alive=false synchronously before async kill",
     async () => {
       const { bridge } = await startBridge({ commandTimeoutMs: 50 });
