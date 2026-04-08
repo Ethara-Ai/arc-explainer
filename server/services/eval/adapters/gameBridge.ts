@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { getPythonBin } from "../../../config/env";
 import { createInterface, type Interface as ReadlineInterface } from "readline";
 import { resolve as resolvePath } from "path";
+import { logger } from "../../../utils/logger";
 import type {
   BridgeCommand,
   BridgeResponse,
@@ -383,7 +384,12 @@ export class GameBridge {
           ),
         );
         // Fire-and-forget kill + respawn to prevent desync with zombie process
-        void this.killAndRespawn().catch(() => {});
+        void this.killAndRespawn().catch((err) => {
+          logger.warn(
+            `[GameBridge:${this.gameId}] killAndRespawn failed after timeout: ${err instanceof Error ? err.message : String(err)}`,
+            "game-bridge",
+          );
+        });
       }, this.config.commandTimeoutMs);
 
       this.pendingResolve = (value: BridgeResponse) => {
