@@ -451,7 +451,13 @@ export default function EvalRunPage() {
     ? (sessions[expandedSessionId] ?? null)
     : null;
   const mergedTimeline = useMemo(() => {
-    const entries: Array<{ index: number; type: 'assistant_message' | 'tool_call' | 'tool_result' | 'reasoning'; label: string; content: string; gameId: string }> = [];
+    const entries: Array<{
+      index: number;
+      type: "assistant_message" | "tool_call" | "tool_result" | "reasoning";
+      label: string;
+      content: string;
+      gameId: string;
+    }> = [];
     for (const s of sessionList) {
       for (const t of s.timeline) {
         entries.push({ ...t, gameId: s.gameId });
@@ -471,17 +477,33 @@ export default function EvalRunPage() {
   }, [sessionList]);
 
   const anySessionPlaying = useMemo(
-    () => sessionList.some(s => s.status === "running" || s.status === "starting"),
+    () =>
+      sessionList.some(
+        (s) => s.status === "running" || s.status === "starting",
+      ),
     [sessionList],
   );
 
   const gameNotepads = useMemo(() => {
-    const map = new Map<string, { content: string; modelName: string; modelColor: string; stepCount: number }>();
+    const map = new Map<
+      string,
+      {
+        content: string;
+        modelName: string;
+        modelColor: string;
+        stepCount: number;
+      }
+    >();
     for (const s of sessionList) {
       if (s.notepad) {
         const existing = map.get(s.gameId);
         if (!existing || s.stepCount > existing.stepCount) {
-          map.set(s.gameId, { content: s.notepad, modelName: s.modelName, modelColor: s.modelColor, stepCount: s.stepCount });
+          map.set(s.gameId, {
+            content: s.notepad,
+            modelName: s.modelName,
+            modelColor: s.modelColor,
+            stepCount: s.stepCount,
+          });
         }
       }
     }
@@ -697,8 +719,7 @@ export default function EvalRunPage() {
                 Ready to evaluate
               </p>
               <p className="text-xs text-gray-500">
-                Select games and models, then click Start. Each model uses its
-                native API.
+                Select games and models in the config panel, then hit Start.
               </p>
             </div>
           )}
@@ -709,24 +730,24 @@ export default function EvalRunPage() {
         <div className="w-80 shrink-0 space-y-3">
           {sessionList.length > 0 ? (
             <>
-            {selectedSession && (
-              <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#12121a] border border-[#1e1e2e]">
-                <div
-                  className="w-2.5 h-2.5 rounded-full"
-                  style={{ backgroundColor: selectedSession.modelColor }}
-                />
-                <span className="text-xs font-semibold text-gray-100">
-                  {selectedSession.modelName}
-                </span>
-                <span className="text-[#2a2a3a]">|</span>
-                <span className="text-xs text-emerald-400">
-                  {selectedSession.gameId}
-                </span>
-                <span className="text-[#2a2a3a]">|</span>
-                <span className="text-[10px] text-gray-500">
-                  Run {selectedSession.runIndex + 1}
-                </span>
-              </div>
+              {selectedSession && (
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#12121a] border border-[#1e1e2e]">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: selectedSession.modelColor }}
+                  />
+                  <span className="text-xs font-semibold text-gray-100">
+                    {selectedSession.modelName}
+                  </span>
+                  <span className="text-[#2a2a3a]">|</span>
+                  <span className="text-xs text-emerald-400">
+                    {selectedSession.gameId}
+                  </span>
+                  <span className="text-[#2a2a3a]">|</span>
+                  <span className="text-[10px] text-gray-500">
+                    Run {selectedSession.runIndex + 1}
+                  </span>
+                </div>
               )}
               <Arc3ReasoningViewer
                 timeline={mergedTimeline}
@@ -741,21 +762,21 @@ export default function EvalRunPage() {
                 modelColor={selectedSession?.modelColor ?? "#6B7280"}
               />
               {Array.from(gameNotepads.entries()).map(([gId, data]) => (
-              <Arc3Notepad
-                key={gId}
-                content={data.content}
-                modelName={data.modelName}
-                modelColor={data.modelColor ?? "#6B7280"}
-                gameId={gId}
-              />
+                <Arc3Notepad
+                  key={gId}
+                  content={data.content}
+                  modelName={data.modelName}
+                  modelColor={data.modelColor ?? "#6B7280"}
+                  gameId={gId}
+                />
               ))}
               {gameNotepads.size === 0 && selectedSession && (
-              <Arc3Notepad
-                content={selectedSession?.notepad}
-                modelName={selectedSession?.modelName ?? "All Models"}
-                modelColor={selectedSession?.modelColor ?? "#6B7280"}
-                gameId={selectedSession?.gameId}
-              />
+                <Arc3Notepad
+                  content={selectedSession?.notepad}
+                  modelName={selectedSession?.modelName ?? "All Models"}
+                  modelColor={selectedSession?.modelColor ?? "#6B7280"}
+                  gameId={selectedSession?.gameId}
+                />
               )}
             </>
           ) : (
