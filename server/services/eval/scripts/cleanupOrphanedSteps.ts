@@ -320,7 +320,7 @@ export function cleanModelDir(modelDir: string, dryRun: boolean): CleanupResult 
   };
 
   // Clean JSONL files
-  for (const jsonlName of ['steps.jsonl', 'skips.jsonl']) {
+  for (const jsonlName of ['steps.jsonl', 'skips.jsonl', 'timing.jsonl']) {
     const filePath = path.join(modelDir, jsonlName);
     if (fs.existsSync(filePath)) {
       const [kept, removed] = cleanJsonl(filePath, validRunIds, dryRun);

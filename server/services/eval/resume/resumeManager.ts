@@ -212,6 +212,7 @@ export function truncateStaleData(
       const jsonlSatellites: Array<{ file: string; keyField: string }> = [
         { file: 'steps.jsonl', keyField: 'run_number' },
         { file: 'skips.jsonl', keyField: 'run_number' },
+        { file: 'timing.jsonl', keyField: 'run_number' },
       ];
 
       for (const { file, keyField } of jsonlSatellites) {

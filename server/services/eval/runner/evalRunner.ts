@@ -248,6 +248,11 @@ export class EvalRunner {
       ? new JsonlWriter(path.join(modelDir, "runs.jsonl"))
       : null;
 
+    // Per-step timing file: {outputDir}/{gameId}/{SafeModel}/timing.jsonl
+    const timingWriter = modelDir
+      ? new JsonlWriter(path.join(modelDir, "timing.jsonl"))
+      : null;
+
     // Per-step token usage CSV: {outputDir}/{gameId}/{SafeModel}/token_usage.csv
     const tokenCsvPath = modelDir
       ? path.join(modelDir, "token_usage.csv")
@@ -298,6 +303,9 @@ export class EvalRunner {
       );
 
       while (step < this.config.maxSteps && !this.game.isDone()) {
+        let apiCallMs: number | null = null;
+        let gameStepMs: number | null = null;
+
         // Honour abort signal — clean exit between steps
         if (this.abortController.signal.aborted) {
           this.emitLog(
@@ -367,7 +375,7 @@ export class EvalRunner {
             notepad.toState(),
             imageB64,
           );
-          const apiCallMs = Date.now() - apiCallStart;
+          apiCallMs = Date.now() - apiCallStart;
           this.emitLog(
             "debug",
             `[EvalRunner] API response in ${apiCallMs}ms: action=${response.action} cost=$${response.costUsd.toFixed(4)} in=${response.inputTokens} out=${response.outputTokens} reasoning=${response.reasoningTokens} cached=${response.cachedInputTokens} (${runId} step=${step})`,
@@ -460,6 +468,17 @@ export class EvalRunner {
             await writeTraceSkip(modelDir, skipRecord, imageB64 !== null);
           }
 
+          if (timingWriter) {
+            await timingWriter.append({
+              run_id: runId,
+              run_number: runNumber,
+              step,
+              api_call_ms: apiCallMs,
+              game_step_ms: gameStepMs,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
           const skipBackoffSec = Math.min(
             Math.pow(this.config.retryBackoffBase, consecutiveSkips),
             this.config.retryMaxWait,
@@ -492,7 +511,7 @@ export class EvalRunner {
         try {
           const gameStepStart = Date.now();
           await this.game.step(response.action);
-          const gameStepMs = Date.now() - gameStepStart;
+          gameStepMs = Date.now() - gameStepStart;
           this.emitLog(
             "debug",
             `[EvalRunner] Game step executed in ${gameStepMs}ms: action=${response.action} (${runId} step=${step})`,
@@ -678,6 +697,19 @@ export class EvalRunner {
             totalCost, response.action, newScore, this.game.getState(),
           ]);
           writePromises.push(appendCsv(tokenCsvPath, TOKEN_CSV_HEADER, row));
+        }
+
+        if (timingWriter) {
+          writePromises.push(
+            timingWriter.append({
+              run_id: runId,
+              run_number: runNumber,
+              step,
+              api_call_ms: apiCallMs,
+              game_step_ms: gameStepMs,
+              timestamp: new Date().toISOString(),
+            }),
+          );
         }
 
         if (writePromises.length > 0) {
