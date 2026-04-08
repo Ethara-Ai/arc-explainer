@@ -41,10 +41,10 @@ describe('Notepad basic operations', () => {
 // ── Truncation ──────────────────────────────────────────────────────────────
 
 describe('Notepad truncation', () => {
-  it('default max is 4000 characters', () => {
+  it('default max is 8000 characters', () => {
     const notepad = new Notepad();
-    notepad.update('x'.repeat(5000));
-    expect(notepad.read()).toHaveLength(4000);
+    notepad.update('x'.repeat(9000));
+    expect(notepad.read()).toHaveLength(8000);
   });
 
   it('respects custom maxChars', () => {
@@ -97,7 +97,7 @@ describe('Notepad toState / fromState', () => {
   });
 
   it('fromState creates independent copy', () => {
-    const state = { content: 'hello', maxChars: 4000, history: ['prev'] };
+    const state = { content: 'hello', maxChars: 8000, history: ['prev'] };
     const restored = Notepad.fromState(state);
 
     restored.update('new');
@@ -109,7 +109,7 @@ describe('Notepad toState / fromState', () => {
     const notepad = new Notepad();
     const state = notepad.toState();
     expect(state.content).toBe('');
-    expect(state.maxChars).toBe(4000);
+    expect(state.maxChars).toBe(8000);
     expect(state.history).toEqual([]);
   });
 });

@@ -10,14 +10,10 @@ describe("buildSystemPrompt arc3", () => {
   it("generates prompt for arc3 game type", () => {
     const prompt = buildSystemPrompt("arc3", 200, 75, false);
 
-    expect(prompt).toContain("interactive puzzle game");
-    expect(prompt).toContain("up, down, left, right");
-    expect(prompt).toContain("click x y");
-    expect(prompt).toContain("reset");
-    expect(prompt).toContain("200 actions");
-    expect(prompt).toContain("75 turns");
+    expect(prompt).toContain("interactive environments");
+    expect(prompt).toContain("click 10 15");
     expect(prompt).toContain("NOTEPAD");
-    expect(prompt).toContain("4000 characters");
+    expect(prompt).toContain("8000 characters");
   });
 
   it("includes image line when withImages=true", () => {
@@ -28,8 +24,8 @@ describe("buildSystemPrompt arc3", () => {
     expect(withoutImages).not.toContain("screenshot image");
   });
 
-  it("incorporates maxSteps and contextWindow", () => {
-    const prompt = buildSystemPrompt("arc3", 100, 30, false);
+  it("incorporates maxSteps and contextWindow in arc2 prompt", () => {
+    const prompt = buildSystemPrompt("arc2", 100, 30);
 
     expect(prompt).toContain("100 actions");
     expect(prompt).toContain("30 turns");
