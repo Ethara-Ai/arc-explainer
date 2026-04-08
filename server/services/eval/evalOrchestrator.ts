@@ -958,11 +958,11 @@ export class EvalOrchestrator {
 
     const modelCfg = MODEL_REGISTRY[task.modelKey];
 
-    if (this.breaker && modelCfg && !this.breaker.canCall(modelCfg.provider)) {
-      const state = this.breaker.getState(modelCfg.provider);
+    if (this.breaker && modelCfg && !this.breaker.canCall(task.modelKey)) {
+      const state = this.breaker.getState(task.modelKey);
       this.emitLog(
         "warn",
-        `[EvalOrchestrator] Circuit OPEN for ${modelCfg.provider} (${state.consecutiveFailures} consecutive failures) -- skipping ${task.modelKey}/${task.gameId}`,
+        `[EvalOrchestrator] Circuit OPEN for ${task.modelKey} (${state.consecutiveFailures} consecutive failures) -- skipping ${task.modelKey}/${task.gameId}`,
       );
       return null;
     }
@@ -1025,7 +1025,7 @@ export class EvalOrchestrator {
       }
 
       if (this.breaker && modelCfg) {
-        this.breaker.recordSuccess(modelCfg.provider);
+        this.breaker.recordSuccess(task.modelKey);
       }
 
       return record;
@@ -1041,7 +1041,7 @@ export class EvalOrchestrator {
       );
 
       if (this.breaker && modelCfg) {
-        this.breaker.recordFailure(modelCfg.provider);
+        this.breaker.recordFailure(task.modelKey);
       }
 
       return null;
