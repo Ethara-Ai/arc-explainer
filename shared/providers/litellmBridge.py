@@ -63,6 +63,22 @@ def _serialize_error(err: Exception) -> dict[str, Any]:
     return error_info
 
 
+def _get_reasoning_content(response: Any) -> str | None:
+    try:
+        choices = getattr(response, "choices", None)
+        if not choices:
+            return None
+        msg = getattr(choices[0], "message", None)
+        if not msg:
+            return None
+        text = getattr(msg, "reasoning_content", None)
+        if text and isinstance(text, str) and text.strip():
+            return text.strip()
+    except (IndexError, AttributeError, TypeError):
+        pass
+    return None
+
+
 def _extract_response_data(response: Any) -> dict[str, Any]:
     """Extract ALL fields from a litellm ModelResponse — nothing stripped.
 
@@ -130,6 +146,18 @@ def _extract_response_data(response: Any) -> dict[str, Any]:
             data["usage"]["reasoning_tokens"] = getattr(cd, "reasoning_tokens", 0) or 0
         else:
             data["usage"]["reasoning_tokens"] = 0
+
+        # Older LiteLLM versions don't populate completion_tokens_details
+        # for Bedrock Converse, but DO pass through reasoning_content text.
+        # Use litellm.token_counter() — same function newer versions use internally.
+        if data["usage"]["reasoning_tokens"] == 0:
+            reasoning_text = _get_reasoning_content(response)
+            if reasoning_text:
+                import litellm
+                model = getattr(response, "model", None) or ""
+                data["usage"]["reasoning_tokens"] = litellm.token_counter(
+                    model=model, text=reasoning_text
+                )
 
         # Prompt caching (OpenAI)
         pd = getattr(usage, "prompt_tokens_details", None)
