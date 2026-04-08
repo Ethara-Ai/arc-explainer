@@ -692,3 +692,219 @@ describe("GameBridge.fromGameId()", () => {
     expect(bridge).toBeInstanceOf(GameBridge);
   });
 });
+
+// ── killAndRespawn / ensureAlive (TDD RED — methods not yet implemented) ─────
+
+describe("killAndRespawn", () => {
+  /**
+   * Helper: create a started GameBridge with controllable mock process.
+   * Returns bridge + all mock helpers for assertions.
+   */
+  async function startBridge(opts?: { commandTimeoutMs?: number }) {
+    const mock = createMockProcess();
+    mockSpawn.mockReturnValue(mock.proc);
+
+    const bridge = new GameBridge("test_game", pyFilePath, {
+      allowedRoot: tmpRoot,
+      commandTimeoutMs: opts?.commandTimeoutMs ?? 5000,
+    });
+
+    const startP = bridge.start();
+    await new Promise((r) => setTimeout(r, 10));
+    mock.sendResponse({
+      type: "info",
+      game_id: "test_game",
+      title: "Test",
+      description: "",
+      available_actions: ["up", "down"],
+      total_levels: 3,
+    } satisfies BridgeInfoResponse);
+    await startP;
+
+    return { bridge, ...mock };
+  }
+
+  // ── Test Case 1 ──────────────────────────────────────────────────────────
+  // killAndRespawn kills subprocess and marks bridge as not alive
+  it.todo(
+    "killAndRespawn kills subprocess and marks bridge as not alive",
+    async () => {
+      const { bridge, proc } = await startBridge();
+
+      expect(bridge.isAlive()).toBe(true);
+
+      // Prepare a second mock process for the respawn phase
+      const mock2 = createMockProcess();
+      mockSpawn.mockReturnValue(mock2.proc);
+
+      // Act: kill and respawn
+      // killAndRespawn should follow the kill chain:
+      //   stdin.end → SIGTERM → 5s grace → SIGKILL (if still alive)
+      const respawnP = (bridge as any).killAndRespawn();
+
+      // During kill, bridge should be marked not alive
+      expect(bridge.isAlive()).toBe(false);
+
+      // Assert SIGTERM was sent to original process
+      expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+
+      // Simulate: original process doesn't die within 5s grace period
+      // Advance timers or wait — SIGKILL should follow
+      await vi.advanceTimersByTimeAsync?.(5000);
+      expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
+
+      // After respawn completes, send info response for new process
+      await new Promise((r) => setTimeout(r, 10));
+      mock2.sendResponse({
+        type: "info",
+        game_id: "test_game",
+        title: "Test",
+        description: "",
+        available_actions: ["up", "down"],
+        total_levels: 3,
+      } satisfies BridgeInfoResponse);
+
+      await respawnP;
+
+      // After respawn, bridge is alive again with the new process
+      expect(bridge.isAlive()).toBe(true);
+      // spawn was called twice: once for start, once for respawn
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  // ── Test Case 2 ──────────────────────────────────────────────────────────
+  // DESYNC REGRESSION: sendCommand after timeout gets fresh response, not stale
+  it.todo(
+    "sendCommand after timeout gets fresh response, not stale one (DESYNC REGRESSION)",
+    async () => {
+      const { bridge, sendResponse } = await startBridge({
+        commandTimeoutMs: 50,
+      });
+
+      // Step 1: Send a reset command that will timeout
+      const resetP = bridge.sendCommand({ type: "reset" });
+      // Let the timeout fire (50ms), don't send any response
+      await expect(resetP).rejects.toThrow("Timed out");
+
+      // Step 2: After timeout, Python finally sends stale response for the
+      // timed-out reset command. This should be DISCARDED, not queued.
+      await new Promise((r) => setTimeout(r, 10));
+      sendResponse({
+        type: "frame",
+        frame: [[99]],
+        score: 0.99,
+        state: "IN_PROGRESS",
+        action_counter: 0,
+        max_actions: 200,
+        win_score: 1.0,
+        available_actions: ["up"],
+      } satisfies BridgeFrameResponse);
+
+      // Step 3: Send a NEW command (step action)
+      const stepP = bridge.sendCommand({
+        type: "action",
+        action: "right",
+        x: null,
+        y: null,
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Python sends the CORRECT response for the step command
+      sendResponse({
+        type: "frame",
+        frame: [[1]],
+        score: 0.1,
+        state: "IN_PROGRESS",
+        action_counter: 1,
+        max_actions: 200,
+        win_score: 1.0,
+        available_actions: ["up", "down"],
+      } satisfies BridgeFrameResponse);
+
+      // Assert: stepP resolves with the CORRECT response (score 0.1),
+      // NOT the stale reset response (score 0.99)
+      const result = (await stepP) as BridgeFrameResponse;
+      expect(result.score).toBe(0.1);
+      expect(result.action_counter).toBe(1);
+      // The stale frame with score 0.99 must NOT leak through
+      expect(result.frame).toEqual([[1]]);
+    },
+  );
+
+  // ── Test Case 3 ──────────────────────────────────────────────────────────
+  // ensureAlive auto-respawns a dead bridge
+  it.todo(
+    "ensureAlive auto-respawns dead bridge",
+    async () => {
+      const { bridge, emitExit } = await startBridge();
+
+      expect(bridge.isAlive()).toBe(true);
+
+      // Simulate process death
+      emitExit(1);
+      expect(bridge.isAlive()).toBe(false);
+
+      // Prepare a fresh mock process for the respawn
+      const mock2 = createMockProcess();
+      mockSpawn.mockReturnValue(mock2.proc);
+
+      // sendCommand internally calls ensureAlive(), which should auto-respawn
+      const cmdP = bridge.sendCommand({ type: "reset" });
+
+      // Wait for the respawn's info handshake
+      await new Promise((r) => setTimeout(r, 10));
+      mock2.sendResponse({
+        type: "info",
+        game_id: "test_game",
+        title: "Test",
+        description: "",
+        available_actions: ["up", "down"],
+        total_levels: 3,
+      } satisfies BridgeInfoResponse);
+
+      // Now the actual reset command goes through
+      await new Promise((r) => setTimeout(r, 10));
+      mock2.sendResponse({
+        type: "frame",
+        frame: [[0]],
+        score: 0,
+        state: "IN_PROGRESS",
+        action_counter: 0,
+        max_actions: 200,
+        win_score: 1.0,
+        available_actions: ["up", "down"],
+      } satisfies BridgeFrameResponse);
+
+      const result = await cmdP;
+      expect(result.type).toBe("frame");
+
+      // Verify a new process was spawned (total 2: original + respawn)
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+      expect(bridge.isAlive()).toBe(true);
+    },
+  );
+
+  // ── Test Case 4 ──────────────────────────────────────────────────────────
+  // timeout handler sets alive=false synchronously before async kill
+  it.todo(
+    "timeout handler sets alive=false synchronously before async kill",
+    async () => {
+      const { bridge } = await startBridge({ commandTimeoutMs: 50 });
+
+      expect(bridge.isAlive()).toBe(true);
+
+      // Send a command that will timeout (no response provided)
+      const cmdP = bridge.sendCommand({ type: "info" });
+
+      // Wait for timeout to fire
+      await expect(cmdP).rejects.toThrow("Timed out");
+
+      // CRITICAL ASSERTION: After timeout fires, alive must be false
+      // SYNCHRONOUSLY — not after an awaited kill. This prevents a
+      // concurrent sendCommand from racing in before the bridge is
+      // marked dead and sending a command to a zombie process.
+      expect(bridge.isAlive()).toBe(false);
+    },
+  );
+});
