@@ -1,4 +1,4 @@
 [submodule "puzzle-environments"]
 	path = puzzle-environments
 	url = git@github.com:Ethara-Ai/arc-web-player.git
-	branch = production
+	branch = main
