@@ -406,20 +406,23 @@ export class EvalRunner {
           continue; // no step increment
         }
 
+        // ── Accumulate costs (ALWAYS — regardless of action outcome) ──────────
+        // The LLM call already happened and cost real money. Record cost before
+        // any branching (SKIP, game rejection, or success) to prevent undercounting.
+        totalCost += response.costUsd;
+        totalInputTokens += response.inputTokens;
+        totalOutputTokens += response.outputTokens;
+        totalReasoningTokens += response.reasoningTokens;
+        totalCachedInputTokens += response.cachedInputTokens;
+        totalCacheWriteTokens += response.cacheWriteTokens;
+
         // ── Handle SKIP action ────────────────────────────────────────────────
         // Provider returned no usable action (parse failure / refusal).
-        // Accumulate cost, feed rejection back into context, back off.
+        // Feed rejection back into context, back off.
         // Terminates after maxConsecutiveSkips to prevent unbounded cost.
         if (response.action === "SKIP") {
           consecutiveSkips += 1;
           if (consecutiveSkips >= maxSkips) {
-            // Accumulate cost for this final SKIP before breaking
-            totalCost += response.costUsd;
-            totalInputTokens += response.inputTokens;
-            totalOutputTokens += response.outputTokens;
-            totalReasoningTokens += response.reasoningTokens;
-            totalCachedInputTokens += response.cachedInputTokens;
-            totalCacheWriteTokens += response.cacheWriteTokens;
             errorMsg = `Terminated: ${consecutiveSkips} consecutive SKIPs — model cannot produce valid actions`;
             this.emitLog(
               "warn",
@@ -427,14 +430,6 @@ export class EvalRunner {
             );
             break;
           }
-
-          // The API call was real — accumulate cost even for SKIPs
-          totalCost += response.costUsd;
-          totalInputTokens += response.inputTokens;
-          totalOutputTokens += response.outputTokens;
-          totalReasoningTokens += response.reasoningTokens;
-          totalCachedInputTokens += response.cachedInputTokens;
-          totalCacheWriteTokens += response.cacheWriteTokens;
 
           // Feed rejection back so model can self-correct on the next attempt
           contextManager.addTurn("user", turnPrompt);
@@ -574,14 +569,6 @@ export class EvalRunner {
           "assistant",
           `Action: ${response.action}\nReasoning: ${response.reasoning}`,
         );
-
-        // ── Accumulate costs ──────────────────────────────────────────────────
-        totalCost += response.costUsd;
-        totalInputTokens += response.inputTokens;
-        totalOutputTokens += response.outputTokens;
-        totalReasoningTokens += response.reasoningTokens;
-        totalCachedInputTokens += response.cachedInputTokens;
-        totalCacheWriteTokens += response.cacheWriteTokens;
 
         // ── Build step record ─────────────────────────────────────────────────
         const stepRecord: StepRecord = this.buildStepRecord(
