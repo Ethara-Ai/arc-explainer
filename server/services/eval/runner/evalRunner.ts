@@ -460,6 +460,7 @@ export class EvalRunner {
             textObs,
             totalCost,
             notepad,
+            this.config.capturePrompts ? context : undefined,
           );
           runSteps.push(skipRecord);
 
@@ -592,6 +593,7 @@ export class EvalRunner {
           textObs,
           totalCost,
           notepad,
+          this.config.capturePrompts ? context : undefined,
         );
         runSteps.push(stepRecord);
 
@@ -1060,6 +1062,7 @@ export class EvalRunner {
     observation: string,
     cumulativeCost: number,
     notepad: Notepad,
+    context?: ProviderMessage[],
   ): StepRecord {
     const rawScore = this.game.getScore();
     const score = Number.isFinite(rawScore)
@@ -1094,6 +1097,7 @@ export class EvalRunner {
       thinkingText: response.thinkingText ?? null,
       cachedInputTokens: response.cachedInputTokens,
       cacheWriteTokens: response.cacheWriteTokens,
+      ...(context ? { promptMessages: context } : {}),
     };
     stepRecordSchema.parse(record);
     return record;

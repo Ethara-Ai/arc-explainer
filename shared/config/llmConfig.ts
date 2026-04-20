@@ -72,6 +72,7 @@ function regionFromId(resourceId: string | undefined): string | null {
  */
 function buildModelRegistry(): Record<string, ModelConfig> {
   const claudeCloudId = process.env.CLAUDE_CLOUD_ARN;
+  const claude47CloudId = process.env.CLAUDE_47_CLOUD_ARN;
   const kimiCloudId = process.env.KIMI_CLOUD_ARN;
 
   if (!claudeCloudId) {
@@ -86,11 +87,13 @@ function buildModelRegistry(): Record<string, ModelConfig> {
   }
 
   const claudeModelId = process.env.CLAUDE_CLOUD_MODEL_ID ?? "";
+  const claude47ModelId = process.env.CLAUDE_47_CLOUD_MODEL_ID ?? "";
   const kimiModelId = process.env.KIMI_CLOUD_MODEL_ID ?? "";
   const geminiModelId = process.env.GEMINI_MODEL_ID ?? "";
   const gptModelId = process.env.GPT_MODEL_ID ?? "";
 
   const claudeLitellmModel = process.env.CLAUDE_CLOUD_LITELLM_MODEL ?? "";
+  const claude47LitellmModel = process.env.CLAUDE_47_CLOUD_LITELLM_MODEL ?? "";
   const kimiLitellmModel = process.env.KIMI_CLOUD_LITELLM_MODEL ?? "";
   const geminiLitellmModel = process.env.GEMINI_LITELLM_MODEL ?? "";
   const gptLitellmModel = process.env.GPT_LITELLM_MODEL ?? "";
@@ -119,7 +122,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
         }
       : null;
 
-  return {
+  const registry: Record<string, ModelConfig> = {
     "claude-opus": {
       name: "Claude Opus 4.6",
       modelId: claudeModelId,
@@ -193,6 +196,24 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       providerHint: "openai",
     },
   };
+
+  if (claude47CloudId) {
+    registry["claude-opus-4.7"] = {
+      name: "Claude Opus 4.7",
+      modelId: claude47ModelId,
+      provider: "litellm-sdk",
+      envKey: "CLOUD_API_KEY",
+      litellmModel: claude47LitellmModel,
+      cloudRegion:
+        regionFromId(claude47CloudId) ?? process.env.CLOUD_REGION ?? "us-east-1",
+      maxContextTokens: 1_000_000,
+      maxOutputTokens: 8192,
+      enableThinking: true,
+      providerHint: "claude",
+    };
+  }
+
+  return registry;
 }
 
 /** Cached registry — built once on first access (after dotenv loads). */
@@ -235,6 +256,7 @@ export const MODEL_REGISTRY = new Proxy({} as Record<string, ModelConfig>, {
  */
 export const ALL_MODEL_KEYS = [
   "claude-opus",
+  "claude-opus-4.7",
   "kimi-k2.5",
   "gemini-3.1-standard",
   "gemini-3.1-priority",
@@ -259,6 +281,7 @@ export interface EvalConfig {
   saveRawResponses: boolean;
   tokenBudget: number;
   providerMaxConcurrent: Record<string, number>;
+  capturePrompts: boolean;
 }
 
 export const DEFAULT_EVAL_CONFIG: EvalConfig = {
@@ -277,6 +300,7 @@ export const DEFAULT_EVAL_CONFIG: EvalConfig = {
   providerMaxConcurrent: {
     "litellm-sdk": 16,
   },
+  capturePrompts: false,
 };
 
 // ---------------------------------------------------------------------------

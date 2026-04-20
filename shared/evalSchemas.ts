@@ -31,6 +31,10 @@ export const stepRecordSchema = z.object({
   thinkingText: z.string().nullable(),
   cachedInputTokens: z.number().int().nonnegative(),
   cacheWriteTokens: z.number().int().nonnegative(),
+  promptMessages: z.array(z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string(),
+  })).optional(),
 });
 
 export const runRecordSchema = z.object({
@@ -99,6 +103,10 @@ export const traceStepSchema = z.object({
   cumulativeCostUsd: z.number().nonnegative(),
   imageSent: z.boolean(),
   rawResponseFile: z.string().nullable(),
+  promptMessages: z.array(z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string(),
+  })).optional(),
   timestamp: z.string(),
 });
 

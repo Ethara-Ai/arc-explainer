@@ -200,6 +200,7 @@ export async function writeTraceStep(
     cumulativeCostUsd: stepRecord.cumulativeCostUsd,
     imageSent,
     rawResponseFile,
+    ...(stepRecord.promptMessages ? { promptMessages: stepRecord.promptMessages } : {}),
     timestamp: new Date().toISOString(),
   };
   traceStepSchema.parse(traceStep);

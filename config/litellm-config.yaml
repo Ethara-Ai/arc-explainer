@@ -25,6 +25,11 @@ model_list:
     litellm_params:
       model: bedrock/anthropic.claude-opus-4-6-v1
 
+  # Claude Opus 4.7 (Bedrock)
+  - model_name: bedrock/anthropic.claude-opus-4-7-v1
+    litellm_params:
+      model: bedrock/anthropic.claude-opus-4-7-v1
+
   # Kimi k2.5 (Bedrock)
   - model_name: bedrock/moonshotai.kimi-k2.5
     litellm_params:
@@ -34,6 +39,12 @@ model_list:
   - model_name: claude-opus-4-6
     litellm_params:
       model: claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY_1
+
+  # Claude Opus 4.7 (Native Anthropic API)
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: claude-opus-4-7
       api_key: os.environ/ANTHROPIC_API_KEY_1
 
 litellm_settings:

@@ -45,6 +45,7 @@ export interface EvalConfig {
   /** Token budget for context trimming (model context - reserved output). 0 = disabled. */
   tokenBudget: number;
   providerMaxConcurrent: Partial<Record<EvalProviderType, number>>;
+  capturePrompts: boolean;
 }
 
 export interface BaseEvalProvider {

@@ -144,6 +144,8 @@ export interface EvalConfig {
   tokenBudget: number;
   /** Per-provider concurrency limits (provider key -> max concurrent) */
   providerMaxConcurrent: Record<string, number>;
+  /** Whether to capture post-trim prompt messages in trace files. Default false (opt-in). */
+  capturePrompts: boolean;
 }
 
 /**
@@ -219,6 +221,8 @@ export interface StepRecord {
   thinkingText: string | null;
   cachedInputTokens: number;
   cacheWriteTokens: number;
+  /** Post-trim conversation context sent to the provider. Only populated when capturePrompts is enabled. */
+  promptMessages?: ProviderMessage[];
 }
 
 /**
@@ -356,6 +360,8 @@ export interface TraceStep {
   imageSent: boolean;
   /** Relative path to the raw API response JSON file, or null if not saved */
   rawResponseFile: string | null;
+  /** Post-trim conversation context sent to the provider. Only present when capturePrompts is enabled. */
+  promptMessages?: ProviderMessage[];
   timestamp: string;
 }
 

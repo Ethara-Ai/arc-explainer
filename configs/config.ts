@@ -258,6 +258,7 @@ export function createDefaultEvalConfig(overrides?: Partial<EvalConfig>): EvalCo
       "openai": 16,
       "kimi-cloud": 32,
     },
+    capturePrompts: false,
     ...overrides,
   };
 }

@@ -112,6 +112,22 @@ export const PRICING: Record<string, TokenPricing> = {
     cachedInputPerM: 0.50,
     cacheWritePerM: 6.25,
   }),
+  // Anthropic Claude Opus 4.7 (cloud)
+  [process.env.CLAUDE_47_CLOUD_MODEL_ID ?? "claude-47-cloud-default"]: createPricing({
+    inputPerM: 5.00,
+    outputPerM: 25.00,
+    reasoningPerM: 25.00,
+    cachedInputPerM: 0.50,
+    cacheWritePerM: 6.25,
+  }),
+  // Anthropic Claude Opus 4.7 via native API
+  "claude-opus-4-7": createPricing({
+    inputPerM: 5.00,
+    outputPerM: 25.00,
+    reasoningPerM: 25.00,
+    cachedInputPerM: 0.50,
+    cacheWritePerM: 6.25,
+  }),
   // Moonshot Kimi k2.5 (cloud)
   [process.env.KIMI_CLOUD_MODEL_ID ?? "kimi-cloud-default"]: createPricing({ inputPerM: 0.72, outputPerM: 3.60 }),
 };
