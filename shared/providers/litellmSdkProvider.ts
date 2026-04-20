@@ -294,7 +294,7 @@ export class LiteLLMSdkProvider extends BaseProvider {
           if (isAdaptive) {
             // Opus 4.7: thinking.type="enabled" is rejected — must use adaptive
             request.extra_body = {
-              thinking: { type: "adaptive" },
+              thinking: { type: "adaptive", display: "summarized" },
             };
             request.reasoning_effort = this._reasoningEffort ?? "high";
           } else {
