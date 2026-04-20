@@ -220,7 +220,7 @@ export class EvalRunner {
     let resetSuccesses = 0; // Count successful RESET executions only
     let consecutiveSkips = 0;
     let errorMsg: string | null = null;
-    let lastStep = 0;
+    let lastStep = -1;
 
     // Trace file path (null if outputDir not configured)
     const tracePath = this.config.outputDir

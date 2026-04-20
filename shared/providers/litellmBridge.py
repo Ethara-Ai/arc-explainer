@@ -217,9 +217,8 @@ async def _handle_completion(req: dict[str, Any]) -> None:
         for key in (
             "tools", "tool_choice", "max_tokens", "temperature",
             "top_p", "stop", "seed", "response_format",
-            # Provider-specific params forwarded by LiteLLM to the backend
             "extra_headers", "reasoning_effort", "store",
-            # Bedrock application inference profile ARN
+            "metadata",
             "model_id",
         ):
             if key in req and req[key] is not None:
@@ -407,7 +406,7 @@ async def _handle_responses(req: dict[str, Any]) -> None:
         for key in (
             "tools", "tool_choice", "max_output_tokens", "temperature",
             "top_p", "stop", "store", "reasoning",
-            "extra_headers",
+            "extra_headers", "metadata",
         ):
             if key in req and req[key] is not None:
                 kwargs[key] = req[key]
@@ -623,6 +622,18 @@ async def _process_line(line: str) -> None:
 async def main() -> None:
     """Main event loop: read NDJSON lines from stdin, dispatch concurrently."""
     global _shutdown
+
+    # Helicone: LiteLLM callback integration — works across all providers without URL changes
+    _helicone_key = os.environ.get("HELICONE_API_KEY", "")
+    if _helicone_key:
+        import litellm as _litellm_init
+        if "helicone" not in _litellm_init.success_callback:
+            _litellm_init.success_callback.append("helicone")  # type: ignore[arg-type]
+        if "helicone" not in _litellm_init.failure_callback:
+            _litellm_init.failure_callback.append("helicone")  # type: ignore[arg-type]
+        _log(f"Helicone callback enabled (key={'*' * 4}{_helicone_key[-4:]})")
+    else:
+        _log("Helicone disabled (HELICONE_API_KEY not set)")
 
     # Send ready signal so the TS side knows we're alive
     _send({"type": "ready", "data": {"pid": os.getpid(), "python": sys.version}})

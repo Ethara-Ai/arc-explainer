@@ -28,7 +28,7 @@ export const ARC3_COLORS_TUPLES: Record<number, [number, number, number]> = {
   12: [255, 133, 27],   // Orange (#FF851B)
   13: [146, 18, 49],    // Dark Red (#921231)
   14: [79, 204, 48],    // Green (#4FCC30)
-  15: [163, 86, 208],   // Purple (#A356D0)
+  15: [163, 86, 214],   // Purple (#A356D6)
 } as const;
 
 /**
@@ -51,7 +51,7 @@ export const ARC3_COLORS_HEX: Record<number, string> = {
   12: '#FF851B',  // Orange
   13: '#921231',  // Dark Red
   14: '#4FCC30',  // Green
-  15: '#A356D0',  // Purple
+  15: '#A356D6',  // Purple
 } as const;
 
 /**

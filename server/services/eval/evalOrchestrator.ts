@@ -996,6 +996,11 @@ export class EvalOrchestrator {
       ? this.providerSemaphores.get(provider)
       : undefined;
 
+    const reservationUsd = 0.10;
+    if (this.budget) {
+      this.budget.reserve(task.gameId, reservationUsd);
+    }
+
     try {
       if (semaphore) {
         this.emitLog(
@@ -1050,6 +1055,9 @@ export class EvalOrchestrator {
 
       return null;
     } finally {
+      if (this.budget) {
+        this.budget.releaseReservation(task.gameId, reservationUsd);
+      }
       if (semaphore) {
         semaphore.release();
       }

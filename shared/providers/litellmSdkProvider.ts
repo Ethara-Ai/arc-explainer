@@ -339,6 +339,13 @@ export class LiteLLMSdkProvider extends BaseProvider {
       request.store = false;
     }
 
+    if (process.env.HELICONE_API_KEY) {
+      request.metadata = {
+        model: this._modelId,
+        provider: this._providerHint ?? "unknown",
+      };
+    }
+
     console.log(
       `[LiteLLMSdkProvider] Sending to bridge: model=${request.model} type=${request.type} cloudRegion=${request.aws_region_name ?? "(none)"} apiKeyLen=${request.api_key?.length ?? 0}`,
     );
