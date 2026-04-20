@@ -413,6 +413,11 @@ export async function createProvider(modelKey: string): Promise<BaseProvider> {
       };
       if (useHeliconeGateway) {
         headers["Helicone-Auth"] = `Bearer ${heliconeKey}`;
+        // Override SigV4 Authorization header — LiteLLM signs with aws_access_key_id
+        // (set to the Helicone key) but our self-hosted Helicone expects Bearer auth.
+        // LiteLLM's base_aws_llm.get_request_headers() checks for "Authorization" in
+        // extra_headers and uses it to replace the SigV4 signature.
+        headers["Authorization"] = `Bearer ${heliconeKey}`;
       }
 
       const isReasoningModel = enableThinking || cfg.reasoningEffort != null;
