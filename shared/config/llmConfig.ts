@@ -415,6 +415,9 @@ export async function createProvider(modelKey: string): Promise<BaseProvider> {
         headers["Helicone-Auth"] = `Bearer ${heliconeKey}`;
       }
 
+      const isReasoningModel = enableThinking || cfg.reasoningEffort != null;
+      const defaultTimeoutMs = isReasoningModel ? 300_000 : 120_000;
+
       return new LiteLLMSdkProvider({
         apiKey: useHeliconeGateway ? "" : apiKey,
         modelId: cfg.modelId,
@@ -424,7 +427,7 @@ export async function createProvider(modelKey: string): Promise<BaseProvider> {
         supportsVision: cfg.supportsVision,
         enableThinking,
         baseUrl: useHeliconeGateway ? heliconeBase : (cfg.baseUrl ?? null),
-        timeoutMs: cfg.timeoutMs,
+        timeoutMs: cfg.timeoutMs ?? defaultTimeoutMs,
         cloudRegion: cfg.cloudRegion,
         providerHint: cfg.providerHint ?? null,
         reasoningEffort: cfg.reasoningEffort ?? null,

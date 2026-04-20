@@ -166,11 +166,12 @@ export class LiteLLMSdkProvider extends BaseProvider {
    */
   async warmup(): Promise<void> {
     this._ensureBridge();
+    const isReasoningModel = this._enableThinking || this._reasoningEffort != null;
     const request: Record<string, any> = {
       type: "completion",
       model: this._litellmModel,
       messages: [{ role: "user", content: "hi" }],
-      max_tokens: 1,
+      max_tokens: isReasoningModel ? 100 : 1,
       timeout: 15,
     };
     if (this._baseUrl) request.base_url = this._baseUrl;
@@ -233,12 +234,13 @@ export class LiteLLMSdkProvider extends BaseProvider {
     // Build the request payload for the Python bridge
     const isAdaptiveClaude = this._providerHint === "claude" &&
       (this._modelId.includes("4.7") || this._modelId.includes("4-7"));
+    const needsLargeOutput = isAdaptiveClaude || this._providerHint === "openai";
     const request: Record<string, any> = {
       type: "completion",
       model: this._litellmModel,
       messages,
       tools: [buildTool(validActions)],
-      max_tokens: isAdaptiveClaude ? 16384 : 8192,
+      max_tokens: needsLargeOutput ? 16384 : 8192,
       api_key: this._apiKey,
       timeout_ms: this._timeoutMs,
     };
