@@ -236,6 +236,12 @@ async def _handle_completion(req: dict[str, Any]) -> None:
         if req.get("aws_region_name"):
             kwargs["aws_region_name"] = req["aws_region_name"]
 
+        # AWS credentials override (for Helicone gateway proxy)
+        if req.get("aws_access_key_id"):
+            kwargs["aws_access_key_id"] = req["aws_access_key_id"]
+        if req.get("aws_secret_access_key"):
+            kwargs["aws_secret_access_key"] = req["aws_secret_access_key"]
+
         # Vertex AI credentials (for Gemini via Vertex)
         if req.get("vertex_project"):
             kwargs["vertex_project"] = req["vertex_project"]
@@ -426,6 +432,12 @@ async def _handle_responses(req: dict[str, Any]) -> None:
         # AWS region for Bedrock
         if req.get("aws_region_name"):
             kwargs["aws_region_name"] = req["aws_region_name"]
+
+        # AWS credentials override (for Helicone gateway proxy)
+        if req.get("aws_access_key_id"):
+            kwargs["aws_access_key_id"] = req["aws_access_key_id"]
+        if req.get("aws_secret_access_key"):
+            kwargs["aws_secret_access_key"] = req["aws_secret_access_key"]
 
         # Vertex AI credentials
         if req.get("vertex_project"):
@@ -625,12 +637,17 @@ async def main() -> None:
 
     # Helicone: LiteLLM callback integration — works across all providers without URL changes
     _helicone_key = os.environ.get("HELICONE_API_KEY", "")
+    _helicone_base = os.environ.get("HELICONE_API_BASE", "")
     if _helicone_key:
         import litellm as _litellm_init
         if "helicone" not in _litellm_init.success_callback:
             _litellm_init.success_callback.append("helicone")  # type: ignore[arg-type]
         if "helicone" not in _litellm_init.failure_callback:
             _litellm_init.failure_callback.append("helicone")  # type: ignore[arg-type]
+        # Set AWS credentials to Helicone key so boto3/SigV4 authenticates against the gateway
+        if _helicone_base:
+            os.environ["AWS_ACCESS_KEY_ID"] = _helicone_key
+            os.environ["AWS_SECRET_ACCESS_KEY"] = "x"
         _log(f"Helicone callback enabled (key={'*' * 4}{_helicone_key[-4:]})")
     else:
         _log("Helicone disabled (HELICONE_API_KEY not set)")

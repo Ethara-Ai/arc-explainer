@@ -35,7 +35,20 @@ import json
 import importlib.util
 import traceback
 import os
+import io
 import numpy as np
+
+# ── Stdout isolation ──────────────────────────────────────────────────────────
+# Redirect stdout to stderr BEFORE loading any game code. This prevents game
+# print() calls from corrupting the JSONL protocol on stdout. We keep a
+# reference to the real stdout for protocol messages only.
+_protocol_out = sys.stdout
+sys.stdout = sys.stderr
+
+def _proto_write(obj):
+    """Write a JSON object to the protocol channel (original stdout)."""
+    _protocol_out.write(json.dumps(obj) + '\\n')
+    _protocol_out.flush()
 
 game_id = ${JSON.stringify(gameId)}
 py_file = ${JSON.stringify(pyFilePath)}
@@ -162,7 +175,7 @@ try:
 except Exception as exc:
     sys.stderr.write(f'[bridge] Failed to load game {game_id}: {exc}\\n')
     sys.stderr.flush()
-    print(json.dumps({'type': 'error', 'message': str(exc)}), flush=True)
+    _proto_write({'type': 'error', 'message': str(exc)})
     sys.exit(1)
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -182,7 +195,7 @@ for raw_line in sys.stdin:
 
     try:
         if cmd_type == 'info':
-            print(json.dumps(get_info_response()), flush=True)
+            _proto_write(get_info_response())
 
         elif cmd_type == 'reset':
             reset_seed = cmd.get('seed')
@@ -192,7 +205,7 @@ for raw_line in sys.stdin:
             done = False
             cumulative_reward = 0.0
             step_count = 0
-            print(json.dumps(build_frame_response()), flush=True)
+            _proto_write(build_frame_response())
 
         elif cmd_type == 'action':
             action_name = cmd.get('action', 'up').strip().lower()
@@ -215,7 +228,7 @@ for raw_line in sys.stdin:
                 done = False
                 cumulative_reward = 0.0
                 step_count = 0
-                print(json.dumps(build_frame_response()), flush=True)
+                _proto_write(build_frame_response())
                 continue
 
             # Pass string action directly to PuzzleEnvironment
@@ -224,7 +237,7 @@ for raw_line in sys.stdin:
             cumulative_reward += result.reward
             done = result.done
             step_count += 1
-            print(json.dumps(build_frame_response(result.reward)), flush=True)
+            _proto_write(build_frame_response(result.reward))
 
         elif cmd_type == 'quit':
             if hasattr(pe, 'close'):
@@ -232,19 +245,13 @@ for raw_line in sys.stdin:
             sys.exit(0)
 
         else:
-            print(
-                json.dumps({'type': 'error', 'message': f'Unknown command type: {cmd_type}'}),
-                flush=True,
-            )
+            _proto_write({'type': 'error', 'message': f'Unknown command type: {cmd_type}'})
 
     except Exception as step_err:
         tb = traceback.format_exc()
         sys.stderr.write(f'[bridge] Step error: {tb}\\n')
         sys.stderr.flush()
-        print(
-            json.dumps({'type': 'error', 'message': str(step_err)}),
-            flush=True,
-        )
+        _proto_write({'type': 'error', 'message': str(step_err)})
 `.trimStart();
 }
 
@@ -500,8 +507,8 @@ export class GameBridge {
   private spawnProcess(): void {
     const pythonBin =
       this.config.env?.["PYTHON_BIN"] ??
-      this.config.pythonBin ??
-      getPythonBin();
+      getPythonBin() ??
+      this.config.pythonBin;
 
     const script = buildPythonScript(this.gameId, this.pyFilePath);
 

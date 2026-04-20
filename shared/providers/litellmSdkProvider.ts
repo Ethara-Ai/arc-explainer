@@ -105,6 +105,8 @@ export class LiteLLMSdkProvider extends BaseProvider {
   private _vertexProject: string | null;
   private _vertexLocation: string | null;
   private _vertexCredentials: string | null;
+  private _awsAccessKeyId: string | null;
+  private _awsSecretAccessKey: string | null;
 
   // Subprocess management (delegated to PythonBridgeProcess)
   private _bridge: PythonBridgeProcess | null = null;
@@ -126,6 +128,8 @@ export class LiteLLMSdkProvider extends BaseProvider {
     vertexProject?: string | null;
     vertexLocation?: string | null;
     vertexCredentials?: string | null;
+    awsAccessKeyId?: string | null;
+    awsSecretAccessKey?: string | null;
   }) {
     super();
     this._apiKey = opts.apiKey;
@@ -144,6 +148,8 @@ export class LiteLLMSdkProvider extends BaseProvider {
     this._vertexProject = opts.vertexProject ?? null;
     this._vertexLocation = opts.vertexLocation ?? null;
     this._vertexCredentials = opts.vertexCredentials ?? null;
+    this._awsAccessKeyId = opts.awsAccessKeyId ?? null;
+    this._awsSecretAccessKey = opts.awsSecretAccessKey ?? null;
   }
 
   get modelName(): string {
@@ -152,6 +158,33 @@ export class LiteLLMSdkProvider extends BaseProvider {
 
   get modelId(): string {
     return this._modelId;
+  }
+
+  /**
+   * Send a minimal request to wake up the gateway (avoids cold-start 503 on first real call).
+   * Swallows errors — warmup failure should never block eval execution.
+   */
+  async warmup(): Promise<void> {
+    this._ensureBridge();
+    const request: Record<string, any> = {
+      type: "completion",
+      model: this._litellmModel,
+      messages: [{ role: "user", content: "hi" }],
+      max_tokens: 1,
+      timeout: 15,
+    };
+    if (this._baseUrl) request.base_url = this._baseUrl;
+    if (this._apiKey) request.api_key = this._apiKey;
+    if (this._cloudRegion) request.aws_region_name = this._cloudRegion;
+    if (this._awsAccessKeyId) request.aws_access_key_id = this._awsAccessKeyId;
+    if (this._awsSecretAccessKey) request.aws_secret_access_key = this._awsSecretAccessKey;
+    if (this._additionalHeaders) request.extra_headers = this._additionalHeaders;
+
+    try {
+      await this._bridge!.sendRequest(request, undefined, 15_000);
+    } catch {
+      // Expected — gateway may still 503 on first ping, but it warms up the route
+    }
   }
 
   // ── Public API ──────────────────────────────────────────────────────────
@@ -198,12 +231,14 @@ export class LiteLLMSdkProvider extends BaseProvider {
     messages.push({ role: "user", content: userContent });
 
     // Build the request payload for the Python bridge
+    const isAdaptiveClaude = this._providerHint === "claude" &&
+      (this._modelId.includes("4.7") || this._modelId.includes("4-7"));
     const request: Record<string, any> = {
       type: "completion",
       model: this._litellmModel,
       messages,
       tools: [buildTool(validActions)],
-      max_tokens: 8192,
+      max_tokens: isAdaptiveClaude ? 16384 : 8192,
       api_key: this._apiKey,
       timeout_ms: this._timeoutMs,
     };
@@ -229,6 +264,13 @@ export class LiteLLMSdkProvider extends BaseProvider {
       request.aws_region_name = this._cloudRegion;
     }
 
+    if (this._awsAccessKeyId) {
+      request.aws_access_key_id = this._awsAccessKeyId;
+    }
+    if (this._awsSecretAccessKey) {
+      request.aws_secret_access_key = this._awsSecretAccessKey;
+    }
+
     if (this._additionalHeaders) {
       request.extra_headers = this._additionalHeaders;
     }
@@ -246,15 +288,22 @@ export class LiteLLMSdkProvider extends BaseProvider {
     if (this._enableThinking) {
       switch (this._providerHint) {
         case "claude": {
-          // Claude requires max_tokens > thinking.budget_tokens.
-          // Budget tokens are consumed from max_tokens, so we need enough
-          // room for both the thinking budget and the actual output.
-          const thinkingBudget = 8192;
-          const minMaxTokens = thinkingBudget + 1024; // budget + headroom for output
-          request.max_tokens = Math.max(request.max_tokens ?? 0, minMaxTokens);
-          request.extra_body = {
-            thinking: { type: "enabled", budget_tokens: thinkingBudget },
-          };
+          const isAdaptive = this._modelId.includes("4.7") || this._modelId.includes("4-7");
+          if (isAdaptive) {
+            // Opus 4.7: thinking.type="enabled" is rejected — must use adaptive
+            request.extra_body = {
+              thinking: { type: "adaptive" },
+            };
+            request.reasoning_effort = this._reasoningEffort ?? "high";
+          } else {
+            // Opus 4/4.6: fixed-budget thinking still supported
+            const thinkingBudget = 8192;
+            const minMaxTokens = thinkingBudget + 1024;
+            request.max_tokens = Math.max(request.max_tokens ?? 0, minMaxTokens);
+            request.extra_body = {
+              thinking: { type: "enabled", budget_tokens: thinkingBudget },
+            };
+          }
           break;
         }
         case "openai":
@@ -268,8 +317,9 @@ export class LiteLLMSdkProvider extends BaseProvider {
           break;
         default:
           request.extra_body = {
-            thinking: { type: "enabled", budget_tokens: 8192 },
+            thinking: { type: "adaptive" },
           };
+          request.reasoning_effort = this._reasoningEffort ?? "high";
           break;
       }
     }

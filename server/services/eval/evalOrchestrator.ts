@@ -657,6 +657,11 @@ export class EvalOrchestrator {
         "info",
         `[EvalOrchestrator] Provider created: ${provider.modelName} (${modelKey})`,
       );
+
+      if ("warmup" in provider && typeof provider.warmup === "function") {
+        this.emitLog("info", `[EvalOrchestrator] Warming up ${modelKey}...`);
+        await provider.warmup();
+      }
       return provider;
     })();
 
@@ -1014,7 +1019,7 @@ export class EvalOrchestrator {
         );
       }
 
-      const record = await this.executeTask(task);
+      const record = await this.executeTask(task, signal);
 
       if (this.budget && record.costUsd > 0) {
         const snap = this.budget.recordCost(task.gameId, record.costUsd);
@@ -1064,14 +1069,17 @@ export class EvalOrchestrator {
     }
   }
 
-  private async executeTask(task: EvalTask): Promise<RunRecord> {
+  private async executeTask(
+    task: EvalTask,
+    signal?: AbortSignal,
+  ): Promise<RunRecord> {
     this.emitLog(
       "info",
       `[EvalOrchestrator] executeTask: model=${task.modelKey} game=${task.gameId} run=${task.runIndex + 1}`,
     );
 
     const rawProvider = await this.getOrCreateProvider(task.modelKey);
-    const provider = bridgeProvider(rawProvider);
+    const provider = bridgeProvider(rawProvider, signal);
 
     // Each run gets its own adapter (and Python subprocess) so parallel
     // runs on the same gameId don't compete for a shared bridge connection.

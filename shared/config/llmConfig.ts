@@ -207,7 +207,8 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       cloudRegion:
         regionFromId(claude47CloudId) ?? process.env.CLOUD_REGION ?? "us-east-1",
       maxContextTokens: 1_000_000,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 16384,
+      reasoningEffort: "xhigh",
       enableThinking: true,
       providerHint: "claude",
     };
@@ -374,26 +375,65 @@ export async function createProvider(modelKey: string): Promise<BaseProvider> {
     throw new Error(`model_id is empty for '${modelKey}'.`);
   }
 
+   // Helicone gateway proxy: route Kimi + Claude requests through Helicone when configured
+  const heliconeBase = process.env.HELICONE_API_BASE ?? null;
+  const heliconeKey = process.env.HELICONE_API_KEY ?? null;
+  const useHeliconeGateway =
+    heliconeBase && heliconeKey && (cfg.providerHint === "kimi" || cfg.providerHint === "claude");
+
+  // Helicone gateway only accepts short model names — override ARN-based litellm models.
+  const HELICONE_MODEL_MAP: Record<string, string> = {
+    "claude-opus": process.env.HELICONE_CLAUDE_MODEL ?? "bedrock/converse/anthropic.claude-opus-4-6-v1",
+    "claude-opus-4.7": process.env.HELICONE_CLAUDE47_MODEL ?? "bedrock/converse/anthropic.claude-opus-4-7",
+    "kimi-k2.5": process.env.HELICONE_KIMI_MODEL ?? "bedrock/converse/moonshotai.kimi-k2.5",
+  };
+  let finalLitellmModel = resolvedLitellmModel;
+  if (useHeliconeGateway) {
+    finalLitellmModel = HELICONE_MODEL_MAP[modelKey] ?? resolvedLitellmModel;
+    console.log(
+      `[createProvider] 🔀 HELICONE PROXY ACTIVE for ${modelKey}:\n` +
+      `  gateway: ${heliconeBase}\n` +
+      `  model:   ${resolvedLitellmModel} → ${finalLitellmModel}\n` +
+      `  auth:    aws_access_key_id (Helicone key)\n` +
+      `  apiKey:  suppressed (empty string)`,
+    );
+  } else {
+    console.log(
+      `[createProvider] DIRECT (no Helicone) for ${modelKey}: model=${resolvedLitellmModel}`,
+    );
+  }
+
   switch (cfg.provider) {
     case "litellm-sdk": {
       const { LiteLLMSdkProvider } =
         await import("../providers/litellmSdkProvider");
+
+      const headers: Record<string, string> = {
+        ...(cfg.additionalHeaders ?? {}),
+      };
+      if (useHeliconeGateway) {
+        headers["Helicone-Auth"] = `Bearer ${heliconeKey}`;
+      }
+
       return new LiteLLMSdkProvider({
-        apiKey,
+        apiKey: useHeliconeGateway ? "" : apiKey,
         modelId: cfg.modelId,
-        litellmModel: resolvedLitellmModel,
+        litellmModel: finalLitellmModel,
         displayName: cfg.name,
         pricingModelId: cfg.pricingModelId,
         supportsVision: cfg.supportsVision,
         enableThinking,
+        baseUrl: useHeliconeGateway ? heliconeBase : (cfg.baseUrl ?? null),
         timeoutMs: cfg.timeoutMs,
         cloudRegion: cfg.cloudRegion,
         providerHint: cfg.providerHint ?? null,
         reasoningEffort: cfg.reasoningEffort ?? null,
-        additionalHeaders: cfg.additionalHeaders ?? null,
+        additionalHeaders: Object.keys(headers).length > 0 ? headers : null,
         vertexProject: cfg.gcpProject ?? null,
         vertexLocation: cfg.gcpLocation ?? null,
         vertexCredentials: cfg.vertexCredentials ?? null,
+        awsAccessKeyId: useHeliconeGateway ? heliconeKey : null,
+        awsSecretAccessKey: useHeliconeGateway ? "x" : null,
       });
     }
     default:
