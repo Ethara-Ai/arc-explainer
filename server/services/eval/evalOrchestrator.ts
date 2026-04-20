@@ -504,6 +504,8 @@ export class EvalOrchestrator {
         avg_score_pct: Math.round(result.avgScore * 10000) / 100,
         solved_count: result.solvedCount,
         total_runs: result.totalRuns,
+        scores: result.scores,
+        score_stddev: result.scoreStddev,
         total_cost_usd: result.runCost,
         completed_models: completedModelKeys.size,
         total_models: totalUniqueModels,
@@ -568,6 +570,8 @@ export class EvalOrchestrator {
           models: gameResults.map((r) => ({
             modelKey: r.modelKey,
             avgScore: r.avgScore,
+            scores: r.scores,
+            scoreStddev: r.scoreStddev,
             solvedCount: r.solvedCount,
             totalRuns: r.totalRuns,
             runCost: r.runCost,
@@ -1158,9 +1162,17 @@ export class EvalOrchestrator {
 
         const totalRuns = runs.length;
         const solvedCount = runs.filter((r) => r.solved).length;
+        const scores = runs.map((r) => r.finalScore);
         const avgScore =
           totalRuns > 0
-            ? runs.reduce((sum, r) => sum + r.finalScore, 0) / totalRuns
+            ? scores.reduce((sum, s) => sum + s, 0) / totalRuns
+            : 0;
+        const scoreStddev =
+          totalRuns > 1
+            ? Math.sqrt(
+                scores.reduce((sum, s) => sum + (s - avgScore) ** 2, 0) /
+                  totalRuns,
+              )
             : 0;
         const runSteps = runs.reduce((sum, r) => sum + r.totalSteps, 0);
         const runCost = runs.reduce((sum, r) => sum + r.costUsd, 0);
@@ -1178,6 +1190,8 @@ export class EvalOrchestrator {
           avgScore,
           solvedCount,
           totalRuns,
+          scores,
+          scoreStddev,
           error,
         });
       }

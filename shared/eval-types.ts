@@ -490,6 +490,8 @@ export interface EvalModelDoneEvent {
   avg_score_pct: number;
   solved_count: number;
   total_runs: number;
+  scores: number[];
+  score_stddev: number;
   total_cost_usd: number;
   completed_models: number;
   total_models: number;
@@ -573,6 +575,10 @@ export interface GameModelResult {
   solvedCount: number;
   /** Total number of runs completed */
   totalRuns: number;
+  /** Individual run scores (one per completed run, 0.0–1.0) */
+  scores: number[];
+  /** Population standard deviation of scores (0 when ≤1 run) */
+  scoreStddev: number;
   /** Error message if the model-game combination failed */
   error: string | null;
 }
