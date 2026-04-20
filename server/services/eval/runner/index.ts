@@ -177,7 +177,7 @@ function parseArgs(argv: string[]): CliArgs {
         i++;
         args.parallelGames = Math.min(
           Math.max(1, parseInt(argv[i] ?? "1", 10)),
-          20,
+          25,
         );
         i++;
         break;
@@ -232,7 +232,7 @@ Options:
   --budget-per-game <usd>    Per-game USD budget limit (default: unlimited)
   --circuit-threshold <n>    Consecutive failures to trip circuit breaker (default: 10)
   --circuit-half-open <sec>  Seconds before half-open retry (default: 300)
-  --parallel-games <n>       Games to run in parallel (default: 1, max: 20)
+  --parallel-games <n>       Games to run in parallel (default: 1, max: 25)
   --parallel-runs <n>        Runs per model in parallel (default: 1, max: 10)
   --sequential               Run models sequentially instead of in parallel
   --game-dir <path>           Override game directory (default: puzzle-environments/)

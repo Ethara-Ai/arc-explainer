@@ -192,7 +192,7 @@ Source: `server/services/eval/runner/index.ts`
 
 | Flag                 | Value         | Default   | Range | Description                               |
 | -------------------- | ------------- | --------- | ----- | ----------------------------------------- |
-| `--parallel-games` | `<n>`       | `1`     | 1–20 | Games to run concurrently                 |
+| `--parallel-games` | `<n>`       | `1`     | 1–25 | Games to run concurrently                 |
 | `--parallel-runs`  | `<n>`       | `1`     | 1–10 | Runs per model to run concurrently        |
 | `--sequential`     | *(boolean)* | `false` | —    | Run models sequentially (not in parallel) |
 

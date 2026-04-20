@@ -124,7 +124,7 @@ function isDisposable(adapter: unknown): adapter is DisposableAdapter {
 
 // ─── Hard caps (match Python) ─────────────────────────────────────────────────
 
-const MAX_PARALLEL_GAMES = 20;
+const MAX_PARALLEL_GAMES = 25;
 const MAX_PARALLEL_RUNS = 10;
 
 // ─── Orchestrator options ─────────────────────────────────────────────────────

@@ -355,7 +355,7 @@ export const Arc3MultiConfigPanel: React.FC<Arc3ConfigurationPanelProps> = ({
                 <input
                   type="range"
                   min={1}
-                  max={20}
+                  max={25}
                   value={parallelGames}
                   onChange={(e) => setParallelGames(Number(e.target.value))}
                   disabled={isRunning}
@@ -363,7 +363,7 @@ export const Arc3MultiConfigPanel: React.FC<Arc3ConfigurationPanelProps> = ({
                 />
                 <div className="flex justify-between text-[9px] text-gray-600">
                   <span>1</span>
-                  <span>20</span>
+                  <span>25</span>
                 </div>
               </div>
               <div className="space-y-1.5">

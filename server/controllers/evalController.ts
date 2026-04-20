@@ -55,14 +55,14 @@ export const evalController = {
         parallelGames != null &&
         (!Number.isInteger(parallelGames) ||
           parallelGames < 1 ||
-          parallelGames > 20)
+          parallelGames > 25)
       ) {
         return res
           .status(400)
           .json(
             formatResponse.error(
               "VALIDATION_ERROR",
-              "parallelGames must be an integer 1-20",
+              "parallelGames must be an integer 1-25",
             ),
           );
       }
