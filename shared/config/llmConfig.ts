@@ -292,7 +292,7 @@ export const DEFAULT_EVAL_CONFIG: EvalConfig = {
   seedBase: 42,
   outputDir: DEFAULT_OUTPUT_DIR,
   dryRun: false,
-  retryAttempts: 10,
+  retryAttempts: 50,
   retryBackoffBase: 1.5,
   retryMaxWait: 60.0,
   maxConsecutiveSkips: 10,

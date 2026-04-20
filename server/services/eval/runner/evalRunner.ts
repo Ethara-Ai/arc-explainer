@@ -937,7 +937,7 @@ export class EvalRunner {
           );
         } else if (isGeminiTransientError(err)) {
           // Tier 2: Gemini transient — moderate 30-60s cooldown
-          waitMs = (30 + Math.random() * 30) * 1000;
+          waitMs = (60 + Math.random() * 15) * 1000;
           this.emitLog(
             "warn",
             `[EvalRunner] Gemini transient error (504/503): ${String(err)}. ` +
