@@ -1,7 +1,7 @@
 // ─── Game State ──────────────────────────────────────────────────────────────
 
 /** Game lifecycle state — matches Python BaseGameAdapter.get_state() */
-export type GameState = "NOT_PLAYED" | "IN_PROGRESS" | "WIN" | "GAME_OVER";
+export type GameState = "NOT_PLAYED" | "NOT_FINISHED" | "WIN" | "GAME_OVER";
 
 /** Game type identifier */
 export type GameType = "arc2" | "arc3";

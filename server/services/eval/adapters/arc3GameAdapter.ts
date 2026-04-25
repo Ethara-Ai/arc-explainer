@@ -79,7 +79,7 @@ function extractFrame(raw: unknown): number[][] {
  * Mirrors the Python Arc3GameAdapter.render_text() output format exactly.
  *
  * Example output:
- *   Grid (5x4) | Level 1/3 | Score: 0% | State: IN_PROGRESS
+ *   Grid (5x4) | Level 1/3 | Score: 0% | State: NOT_FINISHED
  *
  *    0  1  2  3  4
  *    5  6  7  8  9
@@ -269,11 +269,12 @@ export class Arc3GameAdapter implements GameAdapter {
         return "WIN";
       case "GAME_OVER":
         return "GAME_OVER";
+      case "NOT_FINISHED":
       case "IN_PROGRESS":
-        return "IN_PROGRESS";
+        return "NOT_FINISHED";
       default:
-        // Unknown engine states default to IN_PROGRESS (forward-compatible)
-        return "IN_PROGRESS";
+        // Unknown engine states default to NOT_FINISHED (forward-compatible)
+        return "NOT_FINISHED";
     }
   }
 

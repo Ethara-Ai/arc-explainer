@@ -498,6 +498,11 @@ export class EvalRunner {
           notepad.update(response.notepadUpdate);
         }
 
+        // Python game engine on line 509 requires the ORIGINAL action casing
+        // (lowercase per GAME_TEMPLATE.py convention). Only persistence sites
+        // use the uppercased variant.
+        const actionForRecord = response.action.toUpperCase();
+
         // ── Execute action in game engine ─────────────────────────────────────
         // Count RESET attempts before execution (for analytics)
         if (response.action.toUpperCase() === "RESET") {
@@ -575,7 +580,7 @@ export class EvalRunner {
           runId,
           runNumber,
           step,
-          response.action,
+          actionForRecord,
           response,
           textObs,
           totalCost,
@@ -595,7 +600,7 @@ export class EvalRunner {
           game_type: this.game.gameType,
           run_number: runNumber,
           step,
-          action: response.action,
+          action: actionForRecord,
           score: newScore,
           score_pct: stepRecord.scorePct,
           level: this.game.level,
@@ -655,7 +660,7 @@ export class EvalRunner {
               game_type: this.game.gameType,
               run_number: runNumber,
               step,
-              action: response.action,
+              action: actionForRecord,
               score: stepRecord.score,
               score_pct: stepRecord.scorePct,
               level: this.game.level,
@@ -683,7 +688,7 @@ export class EvalRunner {
             runId, this.provider.modelName, this.game.gameId, runNumber,
             step, response.inputTokens, response.outputTokens, response.reasoningTokens,
             response.cachedInputTokens, response.cacheWriteTokens, response.costUsd,
-            totalCost, response.action, newScore, this.game.getState(),
+            totalCost, actionForRecord, newScore, this.game.getState(),
           ]);
           writePromises.push(appendCsv(tokenCsvPath, TOKEN_CSV_HEADER, row));
         }
@@ -833,6 +838,7 @@ export class EvalRunner {
         total_cached_input_tokens: runRecord.totalCachedInputTokens,
         total_cache_write_tokens: runRecord.totalCacheWriteTokens,
         reset_count: runRecord.resetCount,
+        notepad_final: runRecord.notepadFinal,
         timestamp: new Date().toISOString(),
       });
     }

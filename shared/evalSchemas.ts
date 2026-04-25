@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const TRACE_SCHEMA_VERSION = 1;
 
-const gameStateSchema = z.enum(['NOT_PLAYED', 'IN_PROGRESS', 'WIN', 'GAME_OVER']);
+const gameStateSchema = z.enum(['NOT_PLAYED', 'NOT_FINISHED', 'WIN', 'GAME_OVER']);
 const gameTypeSchema = z.enum(['arc2', 'arc3']);
 
 export const stepRecordSchema = z.object({

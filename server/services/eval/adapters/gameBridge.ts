@@ -127,7 +127,7 @@ def build_frame_response(reward=0.0):
     elif done:
         state_str = 'WIN'
     else:
-        state_str = 'IN_PROGRESS'
+        state_str = 'NOT_FINISHED'
 
     # Get available actions from PuzzleEnvironment
     available = list(pe.get_actions())
