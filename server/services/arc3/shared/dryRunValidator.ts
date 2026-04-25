@@ -1,7 +1,6 @@
 
 
-import { getAvailableGames, getGameById } from './gameDiscovery';
-import { PRICING, computeCost } from '@shared/providers/pricing';
+import { getGameById } from './gameDiscovery';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,16 +39,6 @@ export interface DryRunReport {
 }
 
 // ---------------------------------------------------------------------------
-// Average tokens per step (based on historical eval data)
-// ---------------------------------------------------------------------------
-
-const AVG_INPUT_TOKENS_PER_STEP = 3500;
-const AVG_OUTPUT_TOKENS_PER_STEP = 800;
-const AVG_REASONING_TOKENS_PER_STEP = 1200;
-const AVG_CACHED_INPUT_TOKENS_PER_STEP = 1500;
-const AVG_STEPS_PER_RUN = 15;
-
-// ---------------------------------------------------------------------------
 // Validator
 // ---------------------------------------------------------------------------
 
@@ -63,31 +52,12 @@ export function validateDryRun(request: DryRunRequest): DryRunReport {
 
   // Validate models
   const modelValidations: ModelValidation[] = request.models.map((modelId) => {
-    const hasPricing = modelId in PRICING || findPricingKey(modelId) !== null;
+    const hasPricing = false;
     const modelWarnings: string[] = [];
 
-    if (!hasPricing) {
-      modelWarnings.push(`No pricing data for "${modelId}" — cost estimates unavailable`);
-    }
+    modelWarnings.push(`Cost estimation unavailable for "${modelId}" — pricing is provider-reported at runtime`);
 
-    // Estimate cost per run
-    let estimatedCostPerRun = 0;
-    if (hasPricing) {
-      const stepsToEstimate = Math.min(request.maxSteps, AVG_STEPS_PER_RUN);
-      try {
-        const costPerStep = computeCost(
-          modelId,
-          AVG_INPUT_TOKENS_PER_STEP,
-          AVG_OUTPUT_TOKENS_PER_STEP,
-          AVG_REASONING_TOKENS_PER_STEP,
-          AVG_CACHED_INPUT_TOKENS_PER_STEP,
-          0,
-        );
-        estimatedCostPerRun = costPerStep * stepsToEstimate;
-      } catch {
-        modelWarnings.push('Cost estimation failed — pricing lookup error');
-      }
-    }
+    const estimatedCostPerRun = 0;
 
     return {
       modelId,
@@ -153,17 +123,4 @@ export function validateDryRun(request: DryRunRequest): DryRunReport {
     warnings,
     errors,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function findPricingKey(modelId: string): string | null {
-  for (const key of Object.keys(PRICING)) {
-    if (modelId.startsWith(key) || key.startsWith(modelId)) {
-      return key;
-    }
-  }
-  return null;
 }

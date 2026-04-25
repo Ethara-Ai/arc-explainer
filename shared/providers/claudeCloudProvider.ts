@@ -7,7 +7,7 @@ import {
   sanitizeRawResponse,
 } from "./base";
 import { extractRegionFromId } from "./regionUtils";
-import { computeCost } from "./pricing";
+
 
 const DEFAULT_REGION = "us-east-1";
 
@@ -205,14 +205,6 @@ export class ClaudeCloudProvider extends BaseProvider {
     }
 
     action = BaseProvider.matchAction(action, validActions);
-    const cost = computeCost(
-      this._pricingModelId ?? this._modelId,
-      inputTokens,
-      outputTokens,
-      reasoningTokens,
-      cachedInputTokens,
-      cacheWriteTokens,
-    );
 
     return createProviderResponse({
       action,
@@ -223,7 +215,7 @@ export class ClaudeCloudProvider extends BaseProvider {
       reasoningTokens,
       thinkingText:
         thinkingChunks.length > 0 ? thinkingChunks.join("\n\n") : null,
-      costUsd: cost,
+      costUsd: null,
       rawResponse: sanitizeRawResponse(response),
       cachedInputTokens,
       cacheWriteTokens,

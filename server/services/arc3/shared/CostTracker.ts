@@ -1,7 +1,4 @@
 
-
-import { computeCost } from '@shared/providers/pricing';
-
 // ---------------------------------------------------------------------------
 // StepCost
 // ---------------------------------------------------------------------------
@@ -96,23 +93,17 @@ export class CostTracker {
 }
 
 /**
- * Compute cost for a single step using the pricing table.
- * Convenience wrapper around computeCost() that handles the model lookup.
+ * Compute cost for a single step.
+ * Cost is now reported by the LLM provider (LiteLLM) at call time,
+ * so this function returns 0. Callers should use provider-reported cost.
  */
 export function computeStepCost(
-  modelId: string,
-  inputTokens: number,
-  outputTokens: number,
-  reasoningTokens: number = 0,
-  cachedInputTokens: number = 0,
-  cacheWriteTokens: number = 0,
+  _modelId: string,
+  _inputTokens: number,
+  _outputTokens: number,
+  _reasoningTokens: number = 0,
+  _cachedInputTokens: number = 0,
+  _cacheWriteTokens: number = 0,
 ): number {
-  return computeCost(
-    modelId,
-    inputTokens,
-    outputTokens,
-    reasoningTokens,
-    cachedInputTokens,
-    cacheWriteTokens,
-  );
+  return 0;
 }

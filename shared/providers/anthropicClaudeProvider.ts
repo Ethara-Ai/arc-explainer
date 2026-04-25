@@ -7,7 +7,7 @@ import {
   createProviderResponse,
   sanitizeRawResponse,
 } from "./base";
-import { computeCost } from "./pricing";
+
 
 /** Extended Anthropic usage fields not yet in published SDK types */
 interface AnthropicUsageExtended {
@@ -233,15 +233,6 @@ export class AnthropicClaudeProvider extends BaseProvider {
 
     action = BaseProvider.matchAction(action, validActions);
 
-    const cost = computeCost(
-      this._pricingModelId ?? this._modelId,
-      inputTokens,
-      outputTokens,
-      reasoningTokens,
-      cachedInputTokens,
-      cacheWriteTokens,
-    );
-
     return createProviderResponse({
       action,
       reasoning,
@@ -251,7 +242,7 @@ export class AnthropicClaudeProvider extends BaseProvider {
       reasoningTokens,
       thinkingText:
         thinkingChunks.length > 0 ? thinkingChunks.join("\n\n") : null,
-      costUsd: cost,
+      costUsd: null,
       rawResponse: sanitizeRawResponse(
         serializeResponse(response, this._modelId),
       ),

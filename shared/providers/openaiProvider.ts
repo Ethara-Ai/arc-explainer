@@ -9,7 +9,7 @@ import {
   createProviderResponse,
   sanitizeRawResponse,
 } from "./base";
-import { computeCost } from "./pricing";
+
 
 /** OpenAI Responses API client extension (not yet in SDK types) */
 interface ResponsesApiClient {
@@ -255,14 +255,6 @@ export class OpenAIProvider extends BaseProvider {
 
     action = BaseProvider.matchAction(action, validActions);
 
-    const cost = computeCost(
-      this._modelId,
-      inputTokens,
-      outputTokens,
-      reasoningTokens,
-      cachedInputTokens,
-    );
-
     return createProviderResponse({
       action,
       reasoning,
@@ -270,7 +262,7 @@ export class OpenAIProvider extends BaseProvider {
       inputTokens,
       outputTokens,
       reasoningTokens,
-      costUsd: cost,
+      costUsd: null,
       rawResponse: sanitizeRawResponse(
         serializeResponse(response, this._modelId),
       ),
@@ -376,18 +368,6 @@ export class OpenAIProvider extends BaseProvider {
 
     action = BaseProvider.matchAction(action, validActions);
 
-    const apiCost = extUsage?.cost;
-    const cost =
-      apiCost && apiCost > 0
-        ? Number(apiCost)
-        : computeCost(
-            this._modelId,
-            inputTokens,
-            outputTokens,
-            reasoningTokens,
-            cachedInputTokens,
-          );
-
     return createProviderResponse({
       action,
       reasoning,
@@ -395,7 +375,7 @@ export class OpenAIProvider extends BaseProvider {
       inputTokens,
       outputTokens,
       reasoningTokens,
-      costUsd: cost,
+      costUsd: null,
       rawResponse: sanitizeRawResponse(
         serializeResponse(response, this._modelId),
       ),

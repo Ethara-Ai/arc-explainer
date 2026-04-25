@@ -108,12 +108,6 @@ vi.mock("../../server/config/env", () => ({
   getPythonBin: vi.fn(() => "python3"),
 }));
 
-// Mock computeCost for cost fallback tests
-const mockComputeCost = vi.fn<(...args: unknown[]) => number>().mockReturnValue(0.005);
-vi.mock("../../shared/providers/pricing", () => ({
-  computeCost: (...args: unknown[]) => mockComputeCost(...args),
-}));
-
 // ---------------------------------------------------------------------------
 // Import provider AFTER mocks are set up
 // ---------------------------------------------------------------------------
@@ -201,7 +195,6 @@ describe("LiteLLMSdkProvider", () => {
     readySent = false;
     autoRespond = true;
     responseBuilder = null;
-    mockComputeCost.mockReturnValue(0.005);
   });
 
   afterEach(async () => {
@@ -309,24 +302,32 @@ describe("LiteLLMSdkProvider", () => {
       expect(result.costUsd).toBeCloseTo(0.00785, 5);
     });
 
-    it("falls back to computeCost when cost_usd is null", async () => {
+    it("returns null costUsd when bridge returns cost_usd: null", async () => {
       responseBuilder = () => buildBridgeResponseData({ top: { cost_usd: null } });
-      mockComputeCost.mockReturnValue(0.0123);
       const provider = createProvider("openai");
       const result = await provider.chooseActionAsync(baseParams);
 
-      expect(result.costUsd).toBeCloseTo(0.0123, 4);
-      expect(mockComputeCost).toHaveBeenCalled();
+      expect(result.costUsd).toBeNull();
     });
 
-    it("falls back to computeCost when cost_usd is 0", async () => {
+    it("returns 0 costUsd when bridge returns cost_usd: 0", async () => {
       responseBuilder = () => buildBridgeResponseData({ top: { cost_usd: 0 } });
-      mockComputeCost.mockReturnValue(0.0099);
       const provider = createProvider("openai");
       const result = await provider.chooseActionAsync(baseParams);
 
-      expect(result.costUsd).toBeCloseTo(0.0099, 4);
-      expect(mockComputeCost).toHaveBeenCalled();
+      expect(result.costUsd).toBe(0);
+    });
+
+    it("returns null costUsd when bridge omits cost_usd entirely", async () => {
+      responseBuilder = () => {
+        const data = buildBridgeResponseData();
+        delete (data as Record<string, unknown>).cost_usd;
+        return data;
+      };
+      const provider = createProvider("openai");
+      const result = await provider.chooseActionAsync(baseParams);
+
+      expect(result.costUsd).toBeNull();
     });
   });
 

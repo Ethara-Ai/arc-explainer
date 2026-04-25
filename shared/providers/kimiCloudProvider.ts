@@ -7,7 +7,7 @@ import {
   sanitizeRawResponse,
 } from "./base";
 import { extractRegionFromId } from "./regionUtils";
-import { computeCost } from "./pricing";
+
 
 const DEFAULT_REGION = "us-east-1";
 
@@ -218,12 +218,6 @@ export class KimiCloudProvider extends BaseProvider {
     }
 
     action = BaseProvider.matchAction(action, validActions);
-    const cost = computeCost(
-      this._pricingModelId ?? this._modelId,
-      inputTokens,
-      outputTokens,
-      reasoningTokens,
-    );
 
     return createProviderResponse({
       action,
@@ -232,7 +226,7 @@ export class KimiCloudProvider extends BaseProvider {
       inputTokens,
       outputTokens,
       reasoningTokens,
-      costUsd: cost,
+      costUsd: null,
       rawResponse: sanitizeRawResponse(response),
     });
   }
