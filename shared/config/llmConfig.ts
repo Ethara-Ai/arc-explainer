@@ -185,7 +185,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       vertexCredentials: process.env.VERTEXAI_CREDENTIALS ?? null,
     },
     "gpt-5.4-thinking": {
-      name: "ChatGPT 5.4",
+      name: "ChatGPT 5.4 Thinking",
       modelId: gptModelId,
       provider: "litellm-sdk",
       envKey: "GPT_API_KEY",
@@ -208,7 +208,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
         regionFromId(claude47CloudId) ?? process.env.CLOUD_REGION ?? "us-east-1",
       maxContextTokens: 1_000_000,
       maxOutputTokens: 16384,
-      reasoningEffort: "xhigh",
+      reasoningEffort: "high",
       enableThinking: true,
       providerHint: "claude",
     };
@@ -375,73 +375,35 @@ export async function createProvider(modelKey: string): Promise<BaseProvider> {
     throw new Error(`model_id is empty for '${modelKey}'.`);
   }
 
-   // Helicone gateway proxy: route Kimi + Claude requests through Helicone when configured
-  const heliconeBase = process.env.HELICONE_API_BASE ?? null;
-  const heliconeKey = process.env.HELICONE_API_KEY ?? null;
-  const useHeliconeGateway =
-    heliconeBase && heliconeKey && (cfg.providerHint === "kimi" || cfg.providerHint === "claude");
-
-  // Helicone gateway only accepts short model names — override ARN-based litellm models.
-  const HELICONE_MODEL_MAP: Record<string, string> = {
-    "claude-opus": process.env.HELICONE_CLAUDE_MODEL ?? "bedrock/converse/anthropic.claude-opus-4-6-v1",
-    "claude-opus-4.7": process.env.HELICONE_CLAUDE47_MODEL ?? "bedrock/converse/anthropic.claude-opus-4-7",
-    "kimi-k2.5": process.env.HELICONE_KIMI_MODEL ?? "bedrock/converse/moonshotai.kimi-k2.5",
-  };
-  let finalLitellmModel = resolvedLitellmModel;
-  if (useHeliconeGateway) {
-    finalLitellmModel = HELICONE_MODEL_MAP[modelKey] ?? resolvedLitellmModel;
-    console.log(
-      `[createProvider] 🔀 HELICONE PROXY ACTIVE for ${modelKey}:\n` +
-      `  gateway: ${heliconeBase}\n` +
-      `  model:   ${resolvedLitellmModel} → ${finalLitellmModel}\n` +
-      `  auth:    aws_access_key_id (Helicone key)\n` +
-      `  apiKey:  suppressed (empty string)`,
-    );
-  } else {
-    console.log(
-      `[createProvider] DIRECT (no Helicone) for ${modelKey}: model=${resolvedLitellmModel}`,
-    );
-  }
+  console.log(
+    `[createProvider] DIRECT route for ${modelKey}: model=${resolvedLitellmModel}`,
+  );
 
   switch (cfg.provider) {
     case "litellm-sdk": {
       const { LiteLLMSdkProvider } =
         await import("../providers/litellmSdkProvider");
 
-      const headers: Record<string, string> = {
-        ...(cfg.additionalHeaders ?? {}),
-      };
-      if (useHeliconeGateway) {
-        headers["Helicone-Auth"] = `Bearer ${heliconeKey}`;
-        // Override SigV4 Authorization header — LiteLLM signs with aws_access_key_id
-        // (set to the Helicone key) but our self-hosted Helicone expects Bearer auth.
-        // LiteLLM's base_aws_llm.get_request_headers() checks for "Authorization" in
-        // extra_headers and uses it to replace the SigV4 signature.
-        headers["Authorization"] = `Bearer ${heliconeKey}`;
-      }
-
       const isReasoningModel = enableThinking || cfg.reasoningEffort != null;
       const defaultTimeoutMs = isReasoningModel ? 300_000 : 120_000;
 
       return new LiteLLMSdkProvider({
-        apiKey: useHeliconeGateway ? "" : apiKey,
+        apiKey,
         modelId: cfg.modelId,
-        litellmModel: finalLitellmModel,
+        litellmModel: resolvedLitellmModel,
         displayName: cfg.name,
         pricingModelId: cfg.pricingModelId,
         supportsVision: cfg.supportsVision,
         enableThinking,
-        baseUrl: useHeliconeGateway ? heliconeBase : (cfg.baseUrl ?? null),
+        baseUrl: cfg.baseUrl ?? null,
         timeoutMs: cfg.timeoutMs ?? defaultTimeoutMs,
         cloudRegion: cfg.cloudRegion,
         providerHint: cfg.providerHint ?? null,
         reasoningEffort: cfg.reasoningEffort ?? null,
-        additionalHeaders: Object.keys(headers).length > 0 ? headers : null,
+        additionalHeaders: cfg.additionalHeaders ?? null,
         vertexProject: cfg.gcpProject ?? null,
         vertexLocation: cfg.gcpLocation ?? null,
         vertexCredentials: cfg.vertexCredentials ?? null,
-        awsAccessKeyId: useHeliconeGateway ? heliconeKey : null,
-        awsSecretAccessKey: useHeliconeGateway ? "x" : null,
       });
     }
     default:

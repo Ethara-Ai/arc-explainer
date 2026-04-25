@@ -218,7 +218,6 @@ async def _handle_completion(req: dict[str, Any]) -> None:
             "tools", "tool_choice", "max_tokens", "temperature",
             "top_p", "stop", "seed", "response_format",
             "extra_headers", "reasoning_effort", "store",
-            "metadata",
             "model_id",
         ):
             if key in req and req[key] is not None:
@@ -235,12 +234,6 @@ async def _handle_completion(req: dict[str, Any]) -> None:
         # AWS region for Bedrock providers
         if req.get("aws_region_name"):
             kwargs["aws_region_name"] = req["aws_region_name"]
-
-        # AWS credentials override (for Helicone gateway proxy)
-        if req.get("aws_access_key_id"):
-            kwargs["aws_access_key_id"] = req["aws_access_key_id"]
-        if req.get("aws_secret_access_key"):
-            kwargs["aws_secret_access_key"] = req["aws_secret_access_key"]
 
         # Vertex AI credentials (for Gemini via Vertex)
         if req.get("vertex_project"):
@@ -412,7 +405,7 @@ async def _handle_responses(req: dict[str, Any]) -> None:
         for key in (
             "tools", "tool_choice", "max_output_tokens", "temperature",
             "top_p", "stop", "store", "reasoning",
-            "extra_headers", "metadata",
+            "extra_headers",
         ):
             if key in req and req[key] is not None:
                 kwargs[key] = req[key]
@@ -432,12 +425,6 @@ async def _handle_responses(req: dict[str, Any]) -> None:
         # AWS region for Bedrock
         if req.get("aws_region_name"):
             kwargs["aws_region_name"] = req["aws_region_name"]
-
-        # AWS credentials override (for Helicone gateway proxy)
-        if req.get("aws_access_key_id"):
-            kwargs["aws_access_key_id"] = req["aws_access_key_id"]
-        if req.get("aws_secret_access_key"):
-            kwargs["aws_secret_access_key"] = req["aws_secret_access_key"]
 
         # Vertex AI credentials
         if req.get("vertex_project"):
@@ -634,23 +621,6 @@ async def _process_line(line: str) -> None:
 async def main() -> None:
     """Main event loop: read NDJSON lines from stdin, dispatch concurrently."""
     global _shutdown
-
-    # Helicone: LiteLLM callback integration — works across all providers without URL changes
-    _helicone_key = os.environ.get("HELICONE_API_KEY", "")
-    _helicone_base = os.environ.get("HELICONE_API_BASE", "")
-    if _helicone_key:
-        import litellm as _litellm_init
-        if "helicone" not in _litellm_init.success_callback:
-            _litellm_init.success_callback.append("helicone")  # type: ignore[arg-type]
-        if "helicone" not in _litellm_init.failure_callback:
-            _litellm_init.failure_callback.append("helicone")  # type: ignore[arg-type]
-        # Set AWS credentials to Helicone key so boto3/SigV4 authenticates against the gateway
-        if _helicone_base:
-            os.environ["AWS_ACCESS_KEY_ID"] = _helicone_key
-            os.environ["AWS_SECRET_ACCESS_KEY"] = "x"
-        _log(f"Helicone callback enabled (key={'*' * 4}{_helicone_key[-4:]})")
-    else:
-        _log("Helicone disabled (HELICONE_API_KEY not set)")
 
     # Send ready signal so the TS side knows we're alive
     _send({"type": "ready", "data": {"pid": os.getpid(), "python": sys.version}})

@@ -105,8 +105,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
   private _vertexProject: string | null;
   private _vertexLocation: string | null;
   private _vertexCredentials: string | null;
-  private _awsAccessKeyId: string | null;
-  private _awsSecretAccessKey: string | null;
 
   // Subprocess management (delegated to PythonBridgeProcess)
   private _bridge: PythonBridgeProcess | null = null;
@@ -128,8 +126,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
     vertexProject?: string | null;
     vertexLocation?: string | null;
     vertexCredentials?: string | null;
-    awsAccessKeyId?: string | null;
-    awsSecretAccessKey?: string | null;
   }) {
     super();
     this._apiKey = opts.apiKey;
@@ -148,8 +144,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
     this._vertexProject = opts.vertexProject ?? null;
     this._vertexLocation = opts.vertexLocation ?? null;
     this._vertexCredentials = opts.vertexCredentials ?? null;
-    this._awsAccessKeyId = opts.awsAccessKeyId ?? null;
-    this._awsSecretAccessKey = opts.awsSecretAccessKey ?? null;
   }
 
   get modelName(): string {
@@ -177,8 +171,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
     if (this._baseUrl) request.base_url = this._baseUrl;
     if (this._apiKey) request.api_key = this._apiKey;
     if (this._cloudRegion) request.aws_region_name = this._cloudRegion;
-    if (this._awsAccessKeyId) request.aws_access_key_id = this._awsAccessKeyId;
-    if (this._awsSecretAccessKey) request.aws_secret_access_key = this._awsSecretAccessKey;
     if (this._additionalHeaders) request.extra_headers = this._additionalHeaders;
 
     try {
@@ -264,13 +256,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
 
     if (this._cloudRegion) {
       request.aws_region_name = this._cloudRegion;
-    }
-
-    if (this._awsAccessKeyId) {
-      request.aws_access_key_id = this._awsAccessKeyId;
-    }
-    if (this._awsSecretAccessKey) {
-      request.aws_secret_access_key = this._awsSecretAccessKey;
     }
 
     if (this._additionalHeaders) {
@@ -389,13 +374,6 @@ export class LiteLLMSdkProvider extends BaseProvider {
       delete request.reasoning_effort;
 
       request.store = false;
-    }
-
-    if (process.env.HELICONE_API_KEY) {
-      request.metadata = {
-        model: this._modelId,
-        provider: this._providerHint ?? "unknown",
-      };
     }
 
     console.log(
