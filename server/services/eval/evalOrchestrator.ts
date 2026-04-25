@@ -1021,7 +1021,7 @@ export class EvalOrchestrator {
 
       const record = await this.executeTask(task, signal);
 
-      if (this.budget && record.costUsd > 0) {
+      if (this.budget && record.costUsd != null && record.costUsd > 0) {
         const snap = this.budget.recordCost(task.gameId, record.costUsd);
         if (snap.isOverGame) {
           this.emitLog(
@@ -1116,7 +1116,7 @@ export class EvalOrchestrator {
       const record = await runner.runGame(task.runIndex, task.seed);
       this.emitLog(
         "info",
-        `[EvalOrchestrator] Task complete: ${record.runId} score=${record.finalScore} solved=${record.solved} cost=$${record.costUsd.toFixed(4)} steps=${record.totalSteps} elapsed=${record.elapsedSeconds}s`,
+        `[EvalOrchestrator] Task complete: ${record.runId} score=${record.finalScore} solved=${record.solved} cost=$${(record.costUsd ?? 0).toFixed(4)} steps=${record.totalSteps} elapsed=${record.elapsedSeconds}s`,
       );
       return record;
     } finally {
@@ -1191,7 +1191,7 @@ export class EvalOrchestrator {
               )
             : 0;
         const runSteps = runs.reduce((sum, r) => sum + r.totalSteps, 0);
-        const runCost = runs.reduce((sum, r) => sum + r.costUsd, 0);
+        const runCost = runs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
 
         const error =
           totalRuns === 0 && group.errors.length > 0

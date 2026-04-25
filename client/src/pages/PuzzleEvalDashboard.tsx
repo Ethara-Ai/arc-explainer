@@ -821,7 +821,7 @@ export default function PuzzleEvalDashboard() {
                         {(r.final_score * 100).toFixed(1)}%
                       </td>
                       <td className="py-1.5 pr-4">{r.total_steps}</td>
-                      <td className="py-1.5 pr-4">${r.cost_usd.toFixed(4)}</td>
+                      <td className="py-1.5 pr-4">${(r.cost_usd ?? 0).toFixed(4)}</td>
                       <td className="py-1.5 pr-4">{r.solved ? "Yes" : "No"}</td>
                     </tr>
                   ))}

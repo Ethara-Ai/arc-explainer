@@ -131,6 +131,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       litellmModel: claudeLitellmModel,
       cloudRegion:
         regionFromId(claudeCloudId) ?? process.env.CLOUD_REGION ?? "us-east-1",
+      pricingModelId: "anthropic.claude-opus-4-6-v1",
       maxContextTokens: 1_000_000,
       maxOutputTokens: 8192,
       enableThinking: true,
@@ -206,6 +207,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       litellmModel: claude47LitellmModel,
       cloudRegion:
         regionFromId(claude47CloudId) ?? process.env.CLOUD_REGION ?? "us-east-1",
+      pricingModelId: "anthropic.claude-opus-4-7",
       maxContextTokens: 1_000_000,
       maxOutputTokens: 16384,
       reasoningEffort: "high",

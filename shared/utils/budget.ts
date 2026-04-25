@@ -80,7 +80,9 @@ export class BudgetTracker {
   }
 
   /** Record cost and return an immutable snapshot. */
-  recordCost(gameId: string, costUsd: number): BudgetSnapshot {
+  recordCost(gameId: string, costUsd: number | null | undefined): BudgetSnapshot {
+    if (costUsd == null) return this.checkBudget(gameId);
+
     this._globalSpent += costUsd;
     const prev = this._perGame.get(gameId) ?? 0;
     this._perGame.set(gameId, prev + costUsd);

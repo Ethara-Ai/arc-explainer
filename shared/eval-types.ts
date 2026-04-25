@@ -29,7 +29,7 @@ export interface ProviderResponse {
   outputTokens: number;
   reasoningTokens: number;
   thinkingText: string | null;
-  costUsd: number;
+  costUsd: number | null;
   rawResponse: Record<string, unknown> | null;
   cachedInputTokens: number;
   cacheWriteTokens: number;
@@ -207,7 +207,7 @@ export interface StepRecord {
   totalLevels: number | null;
   done: boolean;
   state: GameState;
-  cumulativeCostUsd: number;
+  cumulativeCostUsd: number | null;
   inputTokens: number;
   outputTokens: number;
   notepadLength: number;
@@ -216,7 +216,7 @@ export interface StepRecord {
   observation: string;
   /** Score as percentage 0–100 */
   scorePct: number;
-  stepCostUsd: number;
+  stepCostUsd: number | null;
   reasoningTokens: number;
   thinkingText: string | null;
   cachedInputTokens: number;
@@ -242,12 +242,12 @@ export interface StepEventData {
   totalLevels: number | null;
   done: boolean;
   state: GameState;
-  cumulativeCostUsd: number;
+  cumulativeCostUsd: number | null;
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
   scorePct: number;
-  stepCostUsd: number;
+  stepCostUsd: number | null;
   cachedInputTokens: number;
   cacheWriteTokens: number;
 }
@@ -271,7 +271,7 @@ export interface RunRecord {
   solved: boolean;
   levelsCompleted: number | null;
   totalLevels: number | null;
-  costUsd: number;
+  costUsd: number | null;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalReasoningTokens: number;
@@ -306,7 +306,7 @@ export interface RunEventData {
   solved: boolean;
   levelsCompleted: number | null;
   totalLevels: number | null;
-  costUsd: number;
+  costUsd: number | null;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalReasoningTokens: number;
@@ -355,8 +355,8 @@ export interface TraceStep {
   thinkingText: string | null;
   cachedInputTokens: number;
   cacheWriteTokens: number;
-  stepCostUsd: number;
-  cumulativeCostUsd: number;
+  stepCostUsd: number | null;
+  cumulativeCostUsd: number | null;
   imageSent: boolean;
   /** Relative path to the raw API response JSON file, or null if not saved */
   rawResponseFile: string | null;
@@ -377,7 +377,7 @@ export interface TraceSummary {
   finalScore: number;
   finalScorePct: number;
   solved: boolean;
-  costUsd: number;
+  costUsd: number | null;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalReasoningTokens: number;
@@ -440,8 +440,8 @@ export interface EvalStepEvent {
   reasoning_tokens: number;
   cached_input_tokens: number;
   cache_write_tokens: number;
-  step_cost_usd: number;
-  cumulative_cost_usd: number;
+  step_cost_usd: number | null;
+  cumulative_cost_usd: number | null;
   /** Raw grid data from the game adapter (2D or 3D array of cell colors 0-15) */
   grid?: number[][] | number[][][] | null;
   /** Model reasoning text for this step */
@@ -466,7 +466,7 @@ export interface EvalRunEndEvent {
   solved: boolean;
   levels_completed: number | null;
   total_levels: number | null;
-  cost_usd: number;
+  cost_usd: number | null;
   total_input_tokens: number;
   total_output_tokens: number;
   total_reasoning_tokens: number;

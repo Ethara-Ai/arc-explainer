@@ -167,7 +167,7 @@ export const EvalRunCard: React.FC<EvalRunCardProps> = ({
       <div className="flex items-center justify-between text-[9px] font-mono text-gray-500">
         <span className="text-emerald-400/80">{run.gameId}</span>
         <span>R{run.runNumber + 1}</span>
-        <span>${run.costUsd.toFixed(4)}</span>
+        <span>${(run.costUsd ?? 0).toFixed(4)}</span>
       </div>
 
       {/* Trajectory link when done */}

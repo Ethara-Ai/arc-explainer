@@ -141,7 +141,7 @@ function buildSessionsFromSteps(
       index: sess.timeline.length,
       type: "assistant_message",
       label: `Step ${s.step}: ${s.action}`,
-      content: `Action: ${s.action}\nScore: ${(s.score * 100).toFixed(1)}% | State: ${s.state}\nTokens: in=${s.input_tokens} out=${s.output_tokens} | Cost: $${s.cumulative_cost_usd.toFixed(4)}`,
+      content: `Action: ${s.action}\nScore: ${(s.score * 100).toFixed(1)}% | State: ${s.state}\nTokens: in=${s.input_tokens} out=${s.output_tokens} | Cost: $${(s.cumulative_cost_usd ?? 0).toFixed(4)}`,
     });
 
     sess.notepad = s.notepad_contents || sess.notepad;
@@ -168,7 +168,7 @@ function buildSessionsFromSteps(
         timestamp: Date.now(),
         level: "info",
         source: `${r.model} / ${r.game_id}`,
-        message: `R${r.run_number + 1} done: ${(r.final_score * 100).toFixed(0)}% ${r.solved ? "SOLVED" : ""} $${r.cost_usd.toFixed(4)}`,
+        message: `R${r.run_number + 1} done: ${(r.final_score * 100).toFixed(0)}% ${r.solved ? "SOLVED" : ""} $${(r.cost_usd ?? 0).toFixed(4)}`,
       });
     }
   }

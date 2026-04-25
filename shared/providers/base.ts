@@ -12,7 +12,7 @@ export interface ProviderResponse {
   outputTokens: number;
   reasoningTokens: number; // For models with explicit reasoning (o-series, etc.)
   thinkingText: string | null; // Extended thinking text (Claude thinking blocks, etc.)
-  costUsd: number; // Calculated from tokens + pricing
+  costUsd: number | null; // Calculated from tokens + pricing (null when provider doesn't report cost)
   rawResponse: Record<string, any> | null; // Full API response for debugging
   // --- Prompt caching fields (optional, default 0) ---
   cachedInputTokens: number; // Tokens served from cache (billed at discounted rate)

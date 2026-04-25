@@ -288,7 +288,7 @@ async function main(): Promise<void> {
       console.log(`    Reasoning tkns:  ${response.reasoningTokens}`);
       console.log(`    Cached input:    ${response.cachedInputTokens}`);
       console.log(`    Cache write:     ${response.cacheWriteTokens}`);
-      console.log(`    Cost USD:        $${response.costUsd.toFixed(6)}`);
+      console.log(`    Cost USD:        $${(response.costUsd ?? 0).toFixed(6)}`);
       console.log(
         `    Has thinking:    ${response.thinkingText ? "yes (" + response.thinkingText.length + " chars)" : "no"}`,
       );
@@ -319,7 +319,7 @@ async function main(): Promise<void> {
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
         reasoningTokens: response.reasoningTokens,
-        costUsd: response.costUsd,
+        costUsd: response.costUsd ?? undefined,
         thinkingText: response.thinkingText,
         hasRawResponse: response.rawResponse != null,
         rawResponseKeys: response.rawResponse

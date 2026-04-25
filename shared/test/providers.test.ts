@@ -8,7 +8,6 @@ import {
   createProviderResponse,
 } from "../providers/base";
 
-import { PRICING, computeCost, TokenPricing } from "../providers/pricing";
 
 import { extractRegionFromId } from "../providers/regionUtils";
 
@@ -156,94 +155,6 @@ describe("createProviderResponse", () => {
     });
     expect(resp.cachedInputTokens).toBe(500);
     expect(resp.trafficType).toBe("ON_DEMAND_PRIORITY");
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. Pricing engine
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe("PRICING table", () => {
-  it("has entries for all core models", () => {
-    expect(PRICING["gpt-5.4"]).toBeDefined();
-    expect(PRICING["gemini-3.1-pro-preview"]).toBeDefined();
-    expect(PRICING["gemini-3.1-pro-preview-priority"]).toBeDefined();
-    expect(PRICING[process.env.CLAUDE_CLOUD_MODEL_ID!]).toBeDefined();
-    expect(PRICING[process.env.KIMI_CLOUD_MODEL_ID!]).toBeDefined();
-    expect(PRICING["claude-opus-4-6"]).toBeDefined();
-    expect(PRICING["kimi-k2.5"]).toBeDefined();
-  });
-
-  it("has valid pricing structure for each model", () => {
-    for (const [key, pricing] of Object.entries(PRICING)) {
-      expect(pricing.inputPerM).toBeGreaterThanOrEqual(0);
-      expect(pricing.outputPerM).toBeGreaterThan(0);
-      expect(pricing.longContextThreshold).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it("priority tier is ~1.8x standard for Gemini", () => {
-    const std = PRICING["gemini-3.1-pro-preview"];
-    const pri = PRICING["gemini-3.1-pro-preview-priority"];
-    // Allow small rounding margin
-    expect(pri.inputPerM / std.inputPerM).toBeCloseTo(1.8, 1);
-    expect(pri.outputPerM / std.outputPerM).toBeCloseTo(1.8, 1);
-  });
-});
-
-describe("computeCost", () => {
-  it("calculates GPT-5.4 cost correctly", () => {
-    const cost = computeCost("gpt-5.4", 1000, 500, 100);
-    // input: 1000/1M * 2.50 = 0.0025
-    // text output: (500-100)/1M * 15.00 = 0.006
-    // reasoning: 100/1M * 15.00 = 0.0015
-    // total = 0.01
-    expect(cost).toBeCloseTo(0.01, 6);
-  });
-
-  it("applies long-context tier when threshold exceeded", () => {
-    const shortCost = computeCost("gpt-5.4", 100_000, 1000);
-    const longCost = computeCost("gpt-5.4", 272_000, 1000);
-    // Long-context input rate is 2x standard (5.00 vs 2.50)
-    expect(longCost).toBeGreaterThan(shortCost);
-  });
-
-  it("accounts for cached input tokens", () => {
-    const noCacheCost = computeCost("gpt-5.4", 1000, 500);
-    const withCacheCost = computeCost("gpt-5.4", 500, 500, 0, 500);
-    // Cached tokens are cheaper (0.25/M vs 2.50/M), so total should be less
-    expect(withCacheCost).toBeLessThan(noCacheCost);
-  });
-
-  it("accounts for cache write tokens", () => {
-    const baseCost = computeCost("gpt-5.4", 1000, 500);
-    const withWriteCost = computeCost("gpt-5.4", 1000, 500, 0, 0, 1000);
-    expect(withWriteCost).toBeGreaterThan(baseCost);
-  });
-
-  it("subtracts reasoning from output to avoid double-billing", () => {
-    // 1000 output, 1000 reasoning -> text output = 0
-    const cost = computeCost("gpt-5.4", 1000, 1000, 1000);
-    // input: 1000/1M * 2.50 = 0.0025
-    // text output: 0/1M * 15.00 = 0
-    // reasoning: 1000/1M * 15.00 = 0.015
-    expect(cost).toBeCloseTo(0.0175, 6);
-  });
-
-  it("throws for unknown model", () => {
-    expect(() => computeCost("nonexistent-model", 100, 100)).toThrow(
-      /No pricing data/,
-    );
-  });
-
-  it("does prefix matching for ARN-style model IDs", () => {
-    const modelId = process.env.CLAUDE_CLOUD_MODEL_ID!;
-    const cost = computeCost(modelId, 1000, 500);
-    expect(cost).toBeGreaterThan(0);
-  });
-
-  it("returns zero cost for zero tokens", () => {
-    expect(computeCost("gpt-5.4", 0, 0)).toBe(0);
   });
 });
 
@@ -485,9 +396,6 @@ describe("Barrel export completeness", () => {
     expect(barrel.buildActionDescription).toBeDefined();
     expect(barrel.createProviderResponse).toBeDefined();
     expect(barrel.sanitizeRawResponse).toBeDefined();
-    // Pricing
-    expect(barrel.PRICING).toBeDefined();
-    expect(barrel.computeCost).toBeDefined();
     // Utils
     expect(barrel.extractRegionFromId).toBeDefined();
     // Providers

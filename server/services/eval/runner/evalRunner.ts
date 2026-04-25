@@ -378,7 +378,7 @@ export class EvalRunner {
           apiCallMs = Date.now() - apiCallStart;
           this.emitLog(
             "debug",
-            `[EvalRunner] API response in ${apiCallMs}ms: action=${response.action} cost=$${response.costUsd.toFixed(4)} in=${response.inputTokens} out=${response.outputTokens} reasoning=${response.reasoningTokens} cached=${response.cachedInputTokens} (${runId} step=${step})`,
+            `[EvalRunner] API response in ${apiCallMs}ms: action=${response.action} cost=$${(response.costUsd ?? 0).toFixed(4)} in=${response.inputTokens} out=${response.outputTokens} reasoning=${response.reasoningTokens} cached=${response.cachedInputTokens} (${runId} step=${step})`,
           );
         } catch (retryErr: unknown) {
           // All retry tiers exhausted — back off, do NOT increment step
@@ -409,7 +409,7 @@ export class EvalRunner {
         // ── Accumulate costs (ALWAYS — regardless of action outcome) ──────────
         // The LLM call already happened and cost real money. Record cost before
         // any branching (SKIP, game rejection, or success) to prevent undercounting.
-        totalCost += response.costUsd;
+        totalCost += response.costUsd ?? 0;
         totalInputTokens += response.inputTokens;
         totalOutputTokens += response.outputTokens;
         totalReasoningTokens += response.reasoningTokens;

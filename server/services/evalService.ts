@@ -351,7 +351,7 @@ class EvalService {
           solved: event.solved,
           levelsCompleted: event.levels_completed ?? undefined,
           totalLevels: event.total_levels ?? undefined,
-          costUsd: event.cost_usd,
+          costUsd: event.cost_usd ?? undefined,
           totalInputTokens: event.total_input_tokens,
           totalOutputTokens: event.total_output_tokens,
           totalReasoningTokens: event.total_reasoning_tokens,
