@@ -8,7 +8,6 @@ import {
   createProviderResponse,
   sanitizeRawResponse,
 } from "./base";
-import { computeCost } from "./pricing";
 import { PythonBridgeProcess } from "./PythonBridgeProcess";
 
 // ---------------------------------------------------------------------------
@@ -230,6 +229,7 @@ export class LiteLLMSdkProvider extends BaseProvider {
     const request: Record<string, any> = {
       type: "completion",
       model: this._litellmModel,
+      base_model: this._pricingModelId,
       messages,
       tools: [buildTool(validActions)],
       max_tokens: needsLargeOutput ? 16384 : 8192,
@@ -514,24 +514,9 @@ export class LiteLLMSdkProvider extends BaseProvider {
 
     action = BaseProvider.matchAction(action, validActions);
 
-    // Cost: prefer LiteLLM-computed cost, fallback to our pricing table
-    let costUsd = responseData.cost_usd as number | null;
-    if (costUsd == null || costUsd <= 0) {
-      try {
-        costUsd = computeCost(
-          this._pricingModelId,
-          inputTokens,
-          outputTokens,
-          reasoningTokens,
-          cachedInputTokens,
-          cacheWriteTokens,
-        );
-      } catch {
-        // Fallback rough estimate
-        costUsd =
-          (inputTokens / 1_000_000) * 2.0 + (outputTokens / 1_000_000) * 10.0;
-      }
-    }
+    // Cost: LiteLLM bridge handles all cost computation (via _hidden_params.response_cost
+    // or post-hoc completion_cost with base_model). No local fallback.
+    const costUsd: number | null = (responseData.cost_usd as number | null) ?? null;
 
     return createProviderResponse({
       action,

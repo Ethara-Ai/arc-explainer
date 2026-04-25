@@ -281,6 +281,21 @@ async def _handle_completion(req: dict[str, Any]) -> None:
         usage = result.get("usage", {})
         _log(f"Response {request_id}: {elapsed:.1f}s, in={usage.get('prompt_tokens', '?')}, out={usage.get('completion_tokens', '?')}")
 
+        # Post-hoc cost fallback: when _hidden_params.response_cost is null
+        # (happens for ARN-based model strings), use litellm.completion_cost()
+        # with base_model to resolve pricing from a known short model name.
+        if not result.get("cost_usd") and req.get("base_model"):
+            try:
+                cost = litellm.completion_cost(
+                    completion_response=response,
+                    model=req["model"],
+                    base_model=req["base_model"],
+                )
+                result["cost_usd"] = float(cost) if cost else None
+                _log(f"Post-hoc cost for {request_id}: base_model={req['base_model']}, cost={result['cost_usd']}")
+            except Exception:
+                pass  # cost stays None — no crash
+
         _send({
             "id": request_id,
             "type": "result",
@@ -461,6 +476,19 @@ async def _handle_responses(req: dict[str, Any]) -> None:
         result = _extract_responses_data(response)
         usage = result.get("usage", {})
         _log(f"Responses response {request_id}: {elapsed:.1f}s, in={usage.get('prompt_tokens', '?')}, out={usage.get('completion_tokens', '?')}, reasoning={usage.get('reasoning_tokens', '?')}")
+
+        # Post-hoc cost fallback (same pattern as _handle_completion)
+        if not result.get("cost_usd") and req.get("base_model"):
+            try:
+                cost = litellm.completion_cost(
+                    completion_response=response,
+                    model=req["model"],
+                    base_model=req["base_model"],
+                )
+                result["cost_usd"] = float(cost) if cost else None
+                _log(f"Post-hoc cost for {request_id}: base_model={req['base_model']}, cost={result['cost_usd']}")
+            except Exception:
+                pass  # cost stays None
 
         _send({
             "id": request_id,
