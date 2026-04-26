@@ -202,6 +202,20 @@ async def _handle_completion(req: dict[str, Any]) -> None:
 
     request_id = req.get("id", str(uuid.uuid4()))
 
+    # Register ARN -> base_model pricing so LiteLLM populates
+    # _hidden_params.response_cost automatically during the call.
+    # Without this, response_cost is null for ARN-based model strings
+    # because LiteLLM's internal cost calculator can't find the ARN
+    # in its model_cost dict.
+    if req.get("base_model") and req["model"] != req["base_model"]:
+        try:
+            import litellm as _litellm_for_reg
+            base_info = _litellm_for_reg.model_cost.get(req["base_model"])
+            if base_info:
+                _litellm_for_reg.register_model({req["model"]: base_info})
+        except Exception:
+            pass  # registration failure must not block the call
+
     try:
         # Build kwargs from the request
         kwargs: dict[str, Any] = {
@@ -405,6 +419,15 @@ async def _handle_responses(req: dict[str, Any]) -> None:
     os.environ.setdefault("LITELLM_LOG", "DEBUG")
 
     request_id = req.get("id", str(uuid.uuid4()))
+
+    # Register ARN -> base_model pricing (see _handle_completion for rationale).
+    if req.get("base_model") and req["model"] != req["base_model"]:
+        try:
+            base_info = litellm.model_cost.get(req["base_model"])
+            if base_info:
+                litellm.register_model({req["model"]: base_info})
+        except Exception:
+            pass
 
     try:
         kwargs: dict[str, Any] = {
