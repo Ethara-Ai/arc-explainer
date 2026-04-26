@@ -755,7 +755,7 @@ export class EvalRunner {
         ? Math.min(Math.max(0, this.game.getScore()), 1.0)
         : 0,
       solved: this.game.getState() === "WIN",
-      levelsCompleted: this.game.level,
+      levelsCompleted: this.game.levelsCompleted,
       totalLevels: this.game.totalLevels,
       costUsd: totalCost,
       totalInputTokens,

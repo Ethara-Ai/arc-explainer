@@ -627,6 +627,8 @@ export interface GameAdapter {
   readonly title: string;
   readonly level: number | null;
   readonly totalLevels: number | null;
+  /** Count of levels completed so far (NOT the current level index). */
+  readonly levelsCompleted: number;
   /** Win score — the score value indicating full completion (default 1.0 for percentage-based). */
   readonly winScore: number;
 

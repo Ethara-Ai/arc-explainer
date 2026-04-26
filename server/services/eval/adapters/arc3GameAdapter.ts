@@ -169,6 +169,15 @@ export class Arc3GameAdapter implements GameAdapter {
   }
 
   /**
+   * Count of levels the player has actually COMPLETED so far (0-indexed count).
+   * Sourced from the engine's `_score` via Python bridge metadata.
+   * Distinct from `level` (which is the 1-indexed CURRENT level being played).
+   */
+  get levelsCompleted(): number {
+    return this._lastFrame?.levels_completed ?? 0;
+  }
+
+  /**
    * Total levels in the game.
    * Prefers the value from the last frame; falls back to the info-time value.
    */
