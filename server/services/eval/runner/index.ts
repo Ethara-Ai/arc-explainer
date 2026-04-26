@@ -262,46 +262,89 @@ function makeJsonlEmitter(): EventEmitter {
 }
 
 function makeConsoleEmitter(verbose: boolean): EventEmitter {
+  let logFilePath: string | undefined;
+  const pendingLines: string[] = [];
+
+  const writeToLogFile = (line: string): void => {
+    if (logFilePath) {
+      fs.appendFile(logFilePath, line + "\n").catch(() => {});
+    } else {
+      pendingLines.push(line);
+    }
+  };
+
+  const flushPending = async (): Promise<void> => {
+    if (!logFilePath || pendingLines.length === 0) return;
+    const drained = pendingLines.splice(0, pendingLines.length);
+    await fs.appendFile(logFilePath, drained.join("\n") + "\n").catch(() => {});
+  };
+
   return (event: EvalEvent) => {
     switch (event.type) {
-      case "session_start":
-        break;
-      case "run_start":
-        console.error(
-          `  [run_start] ${event.model} / ${event.game_id} #${event.run_number}`,
+      case "session_start": {
+        if (event.output_dir) {
+          const logsDir = path.join(event.output_dir, "logs");
+          logFilePath = path.join(logsDir, "session.log");
+          fs.mkdir(logsDir, { recursive: true })
+            .then(() => flushPending())
+            .catch(() => {});
+        }
+        writeToLogFile(
+          `[session_start] ${event.session_id} games=${event.game_ids.length} models=${event.model_keys.length} total_runs=${event.total_runs}`,
         );
         break;
-      case "step":
+      }
+      case "run_start": {
+        const line = `  [run_start] ${event.model} / ${event.game_id} #${event.run_number}`;
+        console.error(line);
+        writeToLogFile(line);
+        break;
+      }
+      case "step": {
+        const line =
+          `    [step ${event.step}] ` +
+          `action=${event.action} score=${event.score}`;
         if (verbose) {
-          console.error(
-            `    [step ${event.step}] ` +
-              `action=${event.action} score=${event.score}`,
-          );
+          console.error(line);
         }
+        writeToLogFile(line);
         break;
-      case "run_end":
-        console.error(
+      }
+      case "run_end": {
+        const line =
           `  [run_end] ${event.model} / ${event.game_id} ` +
-            `score=${event.final_score} steps=${event.total_steps} ` +
-            `cost=$${event.cost_usd?.toFixed(4) ?? "?"}`,
-        );
+          `score=${event.final_score} steps=${event.total_steps} ` +
+          `cost=$${event.cost_usd?.toFixed(4) ?? "?"}`;
+        console.error(line);
+        writeToLogFile(line);
         break;
-      case "model_done":
-        console.error(
+      }
+      case "model_done": {
+        const line =
           `  [model_done] ${event.model} / ${event.game_id} ` +
-            `avg=${event.avg_score_pct}% solved=${event.solved_count}/${event.total_runs}`,
-        );
+          `avg=${event.avg_score_pct}% solved=${event.solved_count}/${event.total_runs}`;
+        console.error(line);
+        writeToLogFile(line);
         break;
-      case "error":
-        console.error(`  [ERROR] ${event.code}: ${event.message}`);
+      }
+      case "error": {
+        const line = `  [ERROR] ${event.code}: ${event.message}`;
+        console.error(line);
+        writeToLogFile(line);
         break;
-      case "log":
+      }
+      case "log": {
+        const line = `  [${event.level}] ${event.message}`;
         if (verbose || event.level !== "debug") {
-          console.error(`  [${event.level}] ${event.message}`);
+          console.error(line);
         }
+        writeToLogFile(line);
         break;
-      case "session_end":
+      }
+      case "session_end": {
+        writeToLogFile(`[session_end] ${event.session_id}`);
         break;
+      }
     }
   };
 }

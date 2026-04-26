@@ -450,6 +450,7 @@ export class EvalOrchestrator {
       max_steps: this.sessionConfig.maxSteps,
       total_runs: totalRuns,
       timestamp: new Date().toISOString(),
+      output_dir: this.effectiveOutputDir,
     });
 
     const effectiveParallelGames = Math.min(

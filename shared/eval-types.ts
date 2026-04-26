@@ -402,6 +402,8 @@ export interface EvalSessionStartEvent {
   max_steps: number;
   total_runs: number;
   timestamp: string;
+  /** Absolute path to the session output directory (e.g. `{outputDir}/{timestamp}`). Present for CLI runs that create on-disk outputs. */
+  output_dir?: string;
 }
 
 export interface EvalRunStartEvent {
