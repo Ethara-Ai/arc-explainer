@@ -117,8 +117,7 @@ export abstract class BaseProvider {
       return ["SKIP", "(empty response from LLM)", null];
     }
 
-    // Try JSON extraction first
-    const data = BaseProvider.extractJsonWithAction(text);
+    const data = BaseProvider.extractJsonWithAction(text, validActions);
     if (data !== null) {
       const action = String(data.action ?? "").trim();
       const reasoning = String(data.reasoning ?? "").trim();
@@ -167,19 +166,31 @@ export abstract class BaseProvider {
       if (actionBase === vaBase) return action.toUpperCase();
     }
 
-    // No match -- return as-is
-    return action;
+    // No match -- treat as unparseable rather than silently recording
+    // an invalid action string (e.g. "<action>", "EDIT").
+    return "SKIP";
   }
 
   /**
    * Extract a JSON object containing an 'action' key from text.
    * Uses brace-depth counter to handle nested braces in string values.
+   *
+   * When validActions is provided, the extracted action is validated against it
+   * (via matchAction). JSON objects whose action does not match any valid action
+   * are skipped. The LAST valid JSON is returned (last-valid strategy), treating
+   * the model's final JSON as its true intent after any self-correction. This
+   * also prevents echoed prompt templates (e.g. {"action": "<action>"}) from
+   * being accepted over a later valid JSON or the keyword fallback path.
    */
-  static extractJsonWithAction(text: string): Record<string, any> | null {
+  static extractJsonWithAction(
+    text: string,
+    validActions?: string[],
+  ): Record<string, any> | null {
     let start = 0;
+    let lastValid: Record<string, any> | null = null;
     while (true) {
       const idx = text.indexOf("{", start);
-      if (idx === -1) return null;
+      if (idx === -1) return lastValid;
 
       let depth = 0;
       for (let end = idx; end < text.length; end++) {
@@ -191,7 +202,16 @@ export abstract class BaseProvider {
           try {
             const data = JSON.parse(candidate);
             if (typeof data === "object" && data !== null && "action" in data) {
-              return data;
+              if (validActions && validActions.length > 0) {
+                const matched = BaseProvider.matchAction(
+                  String(data.action ?? "").trim(),
+                  validActions,
+                );
+                if (matched === "SKIP") {
+                  break; // action not in valid set; skip this JSON, try next '{'
+                }
+              }
+              lastValid = data;
             }
           } catch {
             // Not valid JSON, try next '{'
