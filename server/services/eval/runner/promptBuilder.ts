@@ -80,6 +80,7 @@ CRITICAL RULES:
 2. Do NOT use any actions that are not in the list.
 3. If the desired action doesn't map perfectly, choose the closest matching action.
 4. For click, format as: "click 10 15" (with x y coordinates).
+5. You MUST respond in English only. All fields ("reasoning", "notepad_update", etc.) must be written in English.
 
 Respond with JSON:
 {"action": "<action>", "reasoning": "<brief explanation>", "notepad_update": "<updated notepad>"}
@@ -116,6 +117,8 @@ Actions:
 
 Respond with JSON:
 {"action": "<action>", "reasoning": "<brief explanation>", "notepad_update": "<updated notepad>"}
+
+CRITICAL: You MUST respond in English only. All fields ("reasoning", "notepad_update", etc.) must be written in English.
 
 == GRID COLORS ==
 0=black, 1=blue, 2=red, 3=green, 4=yellow, 5=gray, 6=pink, 7=orange, 8=light blue, 9=dark red
