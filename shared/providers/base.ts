@@ -132,7 +132,7 @@ export abstract class BaseProvider {
     }
 
     // Fallback: scan text for action keywords
-    const reasoning = text.slice(0, 500);
+    const reasoning = text.slice(0, 2500);
     for (const va of validActions) {
       if (text.toUpperCase().includes(va.toUpperCase())) {
         return [va, reasoning, null];
@@ -141,7 +141,7 @@ export abstract class BaseProvider {
 
     // Last resort: SKIP — never inject an action the model didn't choose.
     // Silently picking validActions[0] would corrupt benchmark scores.
-    return ["SKIP", `(parse failed) ${text.slice(0, 200)}`, null];
+    return ["SKIP", `(parse failed) ${text.slice(0, 2500)}`, null];
   }
 
   /**

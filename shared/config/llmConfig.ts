@@ -186,7 +186,7 @@ function buildModelRegistry(): Record<string, ModelConfig> {
       vertexCredentials: process.env.VERTEXAI_CREDENTIALS ?? null,
     },
     "gpt-5.4-thinking": {
-      name: "ChatGPT 5.4 Thinking",
+      name: "GPT 5.4 Thinking",
       modelId: gptModelId,
       provider: "litellm-sdk",
       envKey: "GPT_API_KEY",

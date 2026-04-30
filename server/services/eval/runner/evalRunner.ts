@@ -665,7 +665,6 @@ export class EvalRunner {
               score: stepRecord.score,
               score_pct: stepRecord.scorePct,
               level: this.game.level,
-              levels_completed: this.game.levelsCompleted,
               total_levels: this.game.totalLevels,
               done: this.game.isDone(),
               state: this.game.getState(),
