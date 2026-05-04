@@ -1,4 +1,5 @@
 
+import { extractDeduplicatedReasoning } from "./reasoningDedup";
 
 // ---------------------------------------------------------------------------
 // ProviderResponse
@@ -131,17 +132,47 @@ export abstract class BaseProvider {
       }
     }
 
-    // Fallback: scan text for action keywords
-    const reasoning = text.slice(0, 2500);
-    for (const va of validActions) {
-      if (text.toUpperCase().includes(va.toUpperCase())) {
-        return [va, reasoning, null];
+    // Fallback: scan for explicit "Action:" / "Acting:" declarations.
+    // Captures: group1 = action word, group2 = optional trailing digit groups (coords).
+    const actionDeclRegex =
+      /\b(?:action|acting)\s*:\s*["']?(\w+)((?:\s+\d+)*)["']?/gi;
+    let lastValidAction: string | null = null;
+    let match: RegExpExecArray | null;
+    while ((match = actionDeclRegex.exec(text)) !== null) {
+      const actionWord = match[1]!;
+      const rawCoords = match[2]?.trim() ?? "";
+      // Only append coordinates for actions that accept them (CLICK, etc.)
+      // Cap at 2 coordinate numbers (x y format) — discard excess.
+      let candidate: string;
+      if (rawCoords && this.isCoordinateAction(actionWord, validActions)) {
+        const coordNums = rawCoords.split(/\s+/).slice(0, 2).join(" ");
+        candidate = `${actionWord} ${coordNums}`;
+      } else {
+        candidate = actionWord;
       }
+      const matched = BaseProvider.matchAction(candidate, validActions);
+      if (matched !== "SKIP") {
+        lastValidAction = matched;
+      }
+    }
+
+    const reasoning = this.extractFallbackReasoning(text);
+
+    if (lastValidAction) {
+      return [lastValidAction, reasoning, null];
     }
 
     // Last resort: SKIP — never inject an action the model didn't choose.
     // Silently picking validActions[0] would corrupt benchmark scores.
-    return ["SKIP", `(parse failed) ${text.slice(0, 2500)}`, null];
+    return ["SKIP", `(parse failed) ${reasoning}`, null];
+  }
+
+  /**
+   * Extract reasoning fallback.
+   * then caps with sentence boundary.
+   */
+  protected extractFallbackReasoning(text: string): string {
+    return extractDeduplicatedReasoning(text);
   }
 
   /**
@@ -169,6 +200,21 @@ export abstract class BaseProvider {
     // No match -- treat as unparseable rather than silently recording
     // an invalid action string (e.g. "<action>", "EDIT").
     return "SKIP";
+  }
+
+  private static readonly COORDINATE_ACTIONS = new Set(["CLICK"]);
+
+  private isCoordinateAction(
+    actionWord: string,
+    validActions: string[],
+  ): boolean {
+    const upper = actionWord.toUpperCase();
+    return (
+      BaseProvider.COORDINATE_ACTIONS.has(upper) &&
+      validActions.some(
+        (va) => va.toUpperCase().split(/\s+/)[0] === upper,
+      )
+    );
   }
 
   /**

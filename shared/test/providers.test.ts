@@ -8,6 +8,7 @@ import {
   createProviderResponse,
 } from "../providers/base";
 
+import { extractDeduplicatedReasoning } from "../providers/reasoningDedup";
 
 import { extractRegionFromId } from "../providers/regionUtils";
 
@@ -100,12 +101,12 @@ describe("BaseProvider.matchAction", () => {
     expect(result).toBe("CLICK 10 15");
   });
 
-  it("returns as-is when no match found", () => {
-    expect(BaseProvider.matchAction("JUMP", actions)).toBe("JUMP");
+  it("returns SKIP when no match found", () => {
+    expect(BaseProvider.matchAction("JUMP", actions)).toBe("SKIP");
   });
 
   it("handles empty valid actions list", () => {
-    expect(BaseProvider.matchAction("UP", [])).toBe("UP");
+    expect(BaseProvider.matchAction("UP", [])).toBe("SKIP");
   });
 });
 
@@ -120,6 +121,270 @@ describe("buildActionDescription", () => {
 
   it("returns generic description for empty list", () => {
     expect(buildActionDescription([])).toBe("Action to take");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1b. parseActionResponse: last-declaration regex fallback (Change A)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class TestProvider extends BaseProvider {
+  get modelName() { return "Test"; }
+  get modelId() { return "test"; }
+  async chooseActionAsync(): Promise<ProviderResponse> {
+    throw new Error("Not implemented");
+  }
+  testParse(text: string, validActions: string[]): [string, string, string | null] {
+    return this.parseActionResponse(text, validActions);
+  }
+}
+
+describe("parseActionResponse fallback (last-declaration regex)", () => {
+  const provider = new TestProvider();
+  const actions = ["UP", "DOWN", "LEFT", "RIGHT", "RESET", "SELECT"];
+
+  it("extracts action from 'Action: UP' declaration", () => {
+    const text = "I think I should go up.\nAction: UP";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("UP");
+  });
+
+  it("uses last declaration when multiple present", () => {
+    const text = "Action: RESET\nWait no, reconsider.\nAction: DOWN";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("DOWN");
+  });
+
+  it("handles 'Acting:' variant", () => {
+    const text = "My analysis...\nActing: LEFT";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("LEFT");
+  });
+
+  it("handles quoted action values", () => {
+    const text = 'Action: "SELECT"';
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("SELECT");
+  });
+
+  it("does NOT extract action from narrative text mentioning keyword", () => {
+    const text = "I should not RESET the board. Let me think more carefully about this.";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("SKIP");
+  });
+
+  it("returns SKIP when declaration has invalid action", () => {
+    const text = "Action: JUMP";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("SKIP");
+  });
+
+  it("case-insensitive match for declared action", () => {
+    const text = "Action: up";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("UP");
+  });
+
+  it("JSON extraction takes priority over declaration regex", () => {
+    const text = 'Action: LEFT\n{"action": "RIGHT", "reasoning": "correct"}';
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("RIGHT");
+  });
+
+  it("empty response returns SKIP", () => {
+    const [action, reasoning] = provider.testParse("", actions);
+    expect(action).toBe("SKIP");
+    expect(reasoning).toContain("empty");
+  });
+
+  it("reasoning is truncated to 2500 chars in fallback", () => {
+    const longText = "x".repeat(5000) + "\nAction: UP";
+    const [, reasoning] = provider.testParse(longText, actions);
+    expect(reasoning.length).toBeLessThanOrEqual(2700);
+  });
+
+  it("returns last VALID action, not last any action (Action: DOWN then Action: GARBAGE)", () => {
+    const text = "Reasoning: analysis\nAction: DOWN\nMore text\nAction: GARBAGE";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("DOWN");
+  });
+
+  it("ignores 'Action: action' template echo after valid declaration", () => {
+    const text = "Action: LEFT\nSome reasoning here\nAction: action";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("LEFT");
+  });
+
+  it("does not partial-match 'selected' to valid action 'SELECT'", () => {
+    const text = "Action: selected";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("SKIP");
+  });
+
+  it("matches Action:reset (no space after colon)", () => {
+    const text = "Action:RESET";
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("RESET");
+  });
+
+  it("rejects Action: <action> template echo as invalid", () => {
+    const text = 'Action: UP\nChoose carefully\nAction: "action"';
+    const [action] = provider.testParse(text, actions);
+    expect(action).toBe("UP");
+  });
+
+  // CLICK coordinate preservation tests
+  const clickActions = ["UP", "DOWN", "LEFT", "RIGHT", "CLICK", "SUBMIT"];
+
+  it("preserves CLICK coordinates from declaration", () => {
+    const [action] = provider.testParse(
+      "Reasoning: cell at row 22 col 27\nAction: CLICK 22 27",
+      clickActions,
+    );
+    expect(action).toBe("CLICK 22 27");
+  });
+
+  it("handles bare CLICK without coordinates", () => {
+    const [action] = provider.testParse("Action: CLICK", clickActions);
+    expect(action).toBe("CLICK");
+  });
+
+  it("preserves CLICK with single coordinate pair", () => {
+    const [action] = provider.testParse("Action: CLICK 5 9", clickActions);
+    expect(action).toBe("CLICK 5 9");
+  });
+
+  it("does not capture non-digit suffixes after action word", () => {
+    const [action] = provider.testParse("Action: CLICK abc", clickActions);
+    expect(action).toBe("CLICK");
+  });
+
+  it("does NOT append trailing digits to non-coordinate actions", () => {
+    const [action] = provider.testParse("Action: UP 5", clickActions);
+    expect(action).toBe("UP");
+  });
+
+  it("caps CLICK coordinates at 2 numbers (discards excess)", () => {
+    const [action] = provider.testParse("Action: CLICK 10 15 20", clickActions);
+    expect(action).toBe("CLICK 10 15");
+  });
+
+  it("handles CLICK 0 0 (zero coordinates)", () => {
+    const [action] = provider.testParse("Action: CLICK 0 0", clickActions);
+    expect(action).toBe("CLICK 0 0");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1c. Kimi reasoning dedup (Change B)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("extractDeduplicatedReasoning", () => {
+  it("strips paired <think> blocks", () => {
+    const text = "<think>internal reasoning</think>Reasoning: The grid shows a pattern.";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).not.toContain("internal reasoning");
+    expect(result).toContain("grid shows a pattern");
+  });
+
+  it("deduplicates repeated reasoning segments", () => {
+    const text = [
+      "Reasoning: The grid has 3 colored cells in the top row.",
+      "Action: UP",
+      "Reasoning: The grid has 3 colored cells in the top row.",
+      "Action: DOWN",
+      "Reasoning: Now I see 4 cells moved to bottom row.",
+    ].join("\n");
+    const result = extractDeduplicatedReasoning(text);
+    const occurrences = result.match(/3 colored cells/g);
+    expect(occurrences?.length ?? 0).toBeLessThanOrEqual(1);
+    expect(result).toContain("4 cells moved");
+  });
+
+  it("preserves unique segments", () => {
+    const text = [
+      "Reasoning: First I notice the blue pattern.",
+      "Action: UP",
+      "Reasoning: After moving, the red cells shifted.",
+      "Action: DOWN",
+      "Reasoning: The green border emerged.",
+    ].join("\n");
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("blue pattern");
+    expect(result).toContain("red cells shifted");
+    expect(result).toContain("green border");
+  });
+
+  it("caps output at ~2500 chars with sentence boundary", () => {
+    const longSegment = "Reasoning: " + "This is a sentence. ".repeat(200);
+    const result = extractDeduplicatedReasoning(longSegment);
+    expect(result.length).toBeLessThanOrEqual(2700);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("handles text with no Reasoning: markers (passthrough with clean)", () => {
+    const text = "The model produced some output without markers. It goes on and on.";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("model produced some output");
+  });
+
+  it("handles segment terminated by JSON block", () => {
+    const text = 'Reasoning: I should select cell 5.\n{"action": "SELECT", "reasoning": "pick"}';
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("select cell 5");
+    expect(result).not.toContain('"action"');
+  });
+
+  it("handles segment terminated by </think>", () => {
+    const text = "Reasoning: The answer is clear.</think>other stuff";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("answer is clear");
+  });
+
+  it("strips marker prefixes from output", () => {
+    const text = "Reasoning: Just the reasoning content here.";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).not.toMatch(/^Reasoning:/);
+    expect(result).toContain("reasoning content here");
+  });
+
+  it("accepts segment at 74% overlap, rejects at 76% (boundary test)", () => {
+    // Build two segments: seg1 has 10 words, seg2 shares exactly N of them
+    const baseWords = "alpha bravo charlie delta echo foxtrot golf hotel india juliet";
+    // 8/10 overlap = 80% → should reject
+    const seg2High = "alpha bravo charlie delta echo foxtrot golf hotel kilo lima";
+    const textHigh = `Reasoning: ${baseWords}\nAction: UP\nReasoning: ${seg2High}`;
+    const resultHigh = extractDeduplicatedReasoning(textHigh);
+    const highCount = (resultHigh.match(/kilo/g) ?? []).length;
+    expect(highCount).toBe(0);
+
+    // 7/10 overlap = 70% → should accept
+    const seg2Low = "alpha bravo charlie delta echo foxtrot golf unique1 unique2 unique3";
+    const textLow = `Reasoning: ${baseWords}\nAction: UP\nReasoning: ${seg2Low}`;
+    const resultLow = extractDeduplicatedReasoning(textLow);
+    expect(resultLow).toContain("unique1");
+  });
+
+  it("handles no-markers path with clean_no_markers_content equivalent", () => {
+    const text = "Some analysis of the grid.\nnotepad_update: stuff\nAction: UP\nChoose your next action from the list.";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("analysis of the grid");
+    expect(result).not.toContain("notepad_update");
+    expect(result).not.toContain("Choose your next action");
+  });
+
+  it("strips template JSON echo from segments", () => {
+    const text = 'Reasoning: I see a pattern.{"action": "<action>", "reasoning": "<why>" more stuff}';
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("see a pattern");
+    expect(result).not.toContain("<action>");
+  });
+
+  it("terminates segment at 'Please respond with'", () => {
+    const text = "Reasoning: My analysis is complete.\nPlease respond with valid JSON:";
+    const result = extractDeduplicatedReasoning(text);
+    expect(result).toContain("analysis is complete");
+    expect(result).not.toContain("Please respond");
   });
 });
 
