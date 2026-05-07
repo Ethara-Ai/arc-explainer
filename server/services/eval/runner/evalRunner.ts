@@ -431,11 +431,14 @@ export class EvalRunner {
             break;
           }
 
-          // Feed rejection back so model can self-correct on the next attempt
+          // Feed rejection back so model can self-correct on the next attempt.
+          // IMPORTANT: Never inject raw model output or annotated text (e.g. "(parse failed) ...")
+          // into conversation context — models like Kimi K2.5 will echo it back, creating a
+          // feedback loop that contaminates all subsequent reasoning.
           contextManager.addTurn("user", turnPrompt);
           contextManager.addTurn(
             "assistant",
-            `Action: SKIP\nReasoning: ${response.reasoning || "no usable action"}`,
+            `Action: SKIP\nReasoning: Your previous output could not be parsed into a valid action.`,
           );
           contextManager.addTurn(
             "user",

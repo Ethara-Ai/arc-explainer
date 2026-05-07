@@ -15,6 +15,7 @@ export interface ProviderResponse {
   thinkingText: string | null; // Extended thinking text (Claude thinking blocks, etc.)
   costUsd: number | null; // Calculated from tokens + pricing (null when provider doesn't report cost)
   rawResponse: Record<string, any> | null; // Full API response for debugging
+  parseFailed: boolean; // True when no valid action keyword was found in model output
   // --- Prompt caching fields (optional, default 0) ---
   cachedInputTokens: number; // Tokens served from cache (billed at discounted rate)
   cacheWriteTokens: number; // Tokens written to cache (one-time write cost)
@@ -26,7 +27,7 @@ export interface ProviderResponse {
 export function createProviderResponse(
   partial: Omit<
     ProviderResponse,
-    "cachedInputTokens" | "cacheWriteTokens" | "trafficType" | "thinkingText"
+    "cachedInputTokens" | "cacheWriteTokens" | "trafficType" | "thinkingText" | "parseFailed"
   > &
     Partial<
       Pick<
@@ -35,6 +36,7 @@ export function createProviderResponse(
         | "cacheWriteTokens"
         | "trafficType"
         | "thinkingText"
+        | "parseFailed"
       >
     >,
 ): ProviderResponse {
@@ -43,6 +45,7 @@ export function createProviderResponse(
     cacheWriteTokens: 0,
     trafficType: null,
     thinkingText: null,
+    parseFailed: partial.action === "SKIP",
     ...partial,
   };
 }
@@ -164,7 +167,7 @@ export abstract class BaseProvider {
 
     // Last resort: SKIP — never inject an action the model didn't choose.
     // Silently picking validActions[0] would corrupt benchmark scores.
-    return ["SKIP", `(parse failed) ${reasoning}`, null];
+    return ["SKIP", reasoning, null];
   }
 
   /**

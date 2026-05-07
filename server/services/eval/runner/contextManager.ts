@@ -14,6 +14,13 @@ const BUDGET_SAFETY_FACTOR = 0.9;
 // prevents unbounded memory growth on 200+ step runs (each step adds 2-3 msgs).
 const MAX_HISTORY_MESSAGES = 2000;
 
+const PARSE_FAILED_PREFIX = /^\(parse failed\)\s*/;
+
+function sanitizeMessage(msg: ProviderMessage): ProviderMessage {
+  if (!PARSE_FAILED_PREFIX.test(msg.content)) return msg;
+  return { ...msg, content: msg.content.replace(PARSE_FAILED_PREFIX, "") };
+}
+
 /**
  * Estimate token count from text length.
  * Uses a blended ratio for ARC grid data + natural language mix.
@@ -65,9 +72,11 @@ export class ContextManager {
   /**
    * Return the last N messages for LLM consumption.
    * N is determined by windowSize (typically 10 turns = 20 messages).
+   * Strips harness-internal annotations (e.g. "(parse failed)") that should
+   * never be exposed to the model.
    */
   getContext(): ProviderMessage[] {
-    return this.fullHistory.slice(-this.windowSize);
+    return this.fullHistory.slice(-this.windowSize).map(sanitizeMessage);
   }
 
   /**

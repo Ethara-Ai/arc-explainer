@@ -31,6 +31,7 @@ export interface ProviderResponse {
   thinkingText: string | null;
   costUsd: number | null;
   rawResponse: Record<string, unknown> | null;
+  parseFailed: boolean;
   cachedInputTokens: number;
   cacheWriteTokens: number;
   trafficType: string | null;
